@@ -1,0 +1,4 @@
+{
+  "description": "Replaces listed terms with placeholder names (or drops their lines) in everything the model reads, and refuses tool calls that use a placeholder.",
+  "modules": ["./register.ts"]
+}

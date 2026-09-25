@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Claude Code plugin development
+# Written by /plugin-types from the running build. The declarations are
+# Anthropic's (all rights reserved) and claude-code-mcp.d.ts lists this
+# machine's MCP tools, so neither belongs in a public repo.
+.claude/types/
+.claude/settings.local.json
+node_modules/

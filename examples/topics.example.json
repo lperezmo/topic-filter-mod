@@ -1,0 +1,23 @@
+{
+  "placeholder": "codename",
+  "informModel": true,
+  "lists": [
+    {
+      "name": "hidden-repos",
+      "mode": "drop-line",
+      "githubTopic": "claude-hidden",
+      "terms": ["my-private-experiment"]
+    },
+    {
+      "name": "anthropology",
+      "mode": "replace",
+      "terms": ["Teotihuacan", "Chichen Itza", "Maya", "Pyramids of Giza"]
+    },
+    {
+      "name": "email-contacts",
+      "mode": "replace",
+      "restore": true,
+      "terms": ["Ada Lovelace"]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "topic-filter-mod",
+  "owner": {
+    "name": "Luis Perez Morales",
+    "url": "https://github.com/lperezmo"
+  },
+  "metadata": {
+    "description": "topic-filter: a Claude Code mod that hides chosen topics from the model behind placeholder names."
+  },
+  "plugins": [
+    {
+      "name": "topic-filter",
+      "source": "./",
+      "description": "Hide chosen topics from Claude: listed terms become stable placeholder names (or their lines are dropped) before the model reads them.",
+      "version": "0.1.0",
+      "category": "security"
+    }
+  ]
+}

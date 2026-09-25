@@ -56,8 +56,8 @@ gh repo edit OWNER/REPO --add-topic claude-hidden
 then `/topic-filter reload` in a running session.
 
 **4. Restart Claude Code** once after installing: sessions that were already
-running do not load the plugin. The status line then shows
-`on, N terms, M hidden`, `/topic-filter` shows what is set to be hidden and
+running do not load the plugin. The prompt footer then shows a dim
+`topic-filter: M hidden` beside the other modes, `/topic-filter` shows what is set to be hidden and
 where each part comes from, and `/topic-filter log` shows what was actually
 hidden and where (both shown to you only).
 
@@ -133,8 +133,14 @@ which names real terms:
   `--debug-file` the terms end up in that file.
 - Another plugin that hooks `ui.log` sees the lines too.
 
-The status line's `M hidden` counts each hidden word and each dropped line,
-not distinct terms.
+The footer's `M hidden` counts each hidden word and each dropped line,
+not distinct terms. The footer label is drawn on the terminal and in the
+desktop app.
+
+topic-filter pins a status line under the prompt (which Claude Code draws as a
+warning) only when something needs you: it is paused, nothing is switched on,
+the settings have a problem, or a GitHub topic lookup failed. While all is
+well there is no status line, only the dim label.
 
 What a subagent reads is filtered the same way, and its placeholders are
 refused in its tool calls too. The log lists each subagent under its own
@@ -204,7 +210,7 @@ lists and terms it resumed with.
   filter on. Anything may turn it back on.
 - **It never outlasts the session.** The pause is kept in memory only: a
   restart, `/clear` or a reload of the plugin turns filtering back on.
-- **You can see it.** The status line reads `PAUSED` in place of the count,
+- **You can see it.** A status line reads `PAUSED` in place of the footer count,
   and the sidebar says so at the top.
 - **Claude is told.** Pausing and resuming each leave Claude a one-line note,
   so it knows whether placeholders will be refused.
@@ -376,7 +382,7 @@ Read these before relying on it.
 
 ## Troubleshooting
 
-- **No status line, and `/topic-filter` is not a command.** Function hooks are
+- **No footer label, and `/topic-filter` is not a command.** Function hooks are
   off or the session predates the install. Check that
   `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` is `"1"` in the `env` block of
   `~/.claude/settings.json`, then restart Claude Code. `/plugin` has an Errors

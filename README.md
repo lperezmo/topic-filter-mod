@@ -1,5 +1,5 @@
 # topic-filter-mod
-Filter topics out of claude so you can focus on work that is allowed by Anthropic
+Keep chosen topics, repos and names out of Claude Code's context. Nothing on disk changes.
 
 `topic-filter` is a [Claude Mod](https://github.com/anthropics/claude-code/tree/main/mods)
 (a Claude Code plugin built on function hooks) that hides chosen topics from

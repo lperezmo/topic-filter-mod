@@ -92,6 +92,16 @@ let hiddenCount = 0
 /** What was hidden and where, for `/topic-filter log`: memory only, shown to the person only. */
 const hiddenLog = new HiddenLog()
 
+/**
+ * Whether the person paused filtering with `/topic-filter off`. Memory only:
+ * a restart, /clear or a reload turns filtering back on, so a forgotten
+ * pause does not outlive the session.
+ */
+let paused = false
+
+/** Who may pause: the person at the prompt, here or through Remote Control. Resuming is open to anyone. */
+const MAY_PAUSE = new Set(['composer', 'bridge'])
+
 /** Whether this module has matched the sidebar to its setting yet: once per load, as a /config change reloads it. */
 let sidebarSynced = false
 
@@ -382,6 +392,22 @@ async function current($: EngineInterface): Promise<Loaded> {
   return loaded
 }
 
+/** The filter to apply now: none while the person has paused it. */
+async function active($: EngineInterface): Promise<Filter | null> {
+  const f = (await current($)).filter
+  return paused ? null : f
+}
+
+/** Drops what was filtered from answers the engine may have kept, after a pause or a resume. */
+function refilter($: EngineInterface): void {
+  $.ui.invalidate('prompt.section')
+  $.ui.invalidate('prompt.context')
+  $.ui.invalidate('prompt.attachment')
+  $.ui.invalidate('tool.describe')
+  $.ui.invalidate('ui.render')
+  showStatus($)
+}
+
 async function build($: EngineInterface, path: string, topicsKey: string, previous: Loaded | undefined): Promise<Loaded> {
   const isMissing = topicsKey.endsWith('|missing')
 
@@ -461,6 +487,7 @@ function statusText(): string {
   if (loaded === undefined || (loaded.filter === null && loaded.error === undefined)) {
     return 'topic-filter: off, nothing chosen to hide. Switch on packs in /config.'
   }
+  if (paused) return 'topic-filter: PAUSED, nothing is hidden. /topic-filter on resumes it.'
   if (loaded.filter === null) return `topic-filter: BLOCKING tool calls. ${firstSentence(loaded.error ?? '')} Run /topic-filter.`
   const base = `topic-filter: on, ${count(loaded.filter.termCount, 'term')}, ${hiddenCount} hidden`
   if (loaded.error !== undefined) return `${base}. Using the last good settings: ${firstSentence(loaded.error)} Run /topic-filter.`
@@ -523,8 +550,8 @@ export function register(on: On, options: PluginOptions) {
       await $.command.register({
         name: COMMAND,
         description:
-          'Show what topic-filter is set to hide; `log` lists what was hidden and where; `sidebar` shows or hides it in a pane; `packs` lists topic packs; `reload` re-reads everything',
-        argumentHint: '[reload|packs|log|log clear|sidebar]',
+          'Show what topic-filter is set to hide; `off` pauses it and `on` resumes it; `log` lists what was hidden and where; `sidebar` shows or hides it in a pane; `packs` lists topic packs; `reload` re-reads everything',
+        argumentHint: '[on|off|reload|packs|log|log clear|sidebar]',
       })
     } catch {
       // The filter works without its command.
@@ -539,11 +566,20 @@ export function register(on: On, options: PluginOptions) {
     return next(e)
   })
 
+  // A pause lasts one session: /clear ends it too.
+  on('session.end', async ($, e, next) => {
+    if (paused) {
+      paused = false
+      refilter($)
+    }
+    return next(e)
+  })
+
   on('tool.call', async ($, e, next) => {
     const l = await current($)
     const f = l.filter
     if (f === null) {
-      if (l.error !== undefined) {
+      if (l.error !== undefined && !paused) {
         // The model is told there is a problem, never what it is: the
         // message names packs, which would say what is being hidden.
         return {
@@ -555,6 +591,8 @@ export function register(on: On, options: PluginOptions) {
       return next(e)
     }
 
+    // Paused, the list itself stays out of reach, and a file the model holds
+    // a filtered copy of still cannot be overwritten whole; the rest is off.
     const input = e as unknown as Record<string, unknown>
     if (mentionsPath(input, l.path)) {
       return { deny: 'topic-filter: that path holds the list of hidden topics, which this session may not read or change.' }
@@ -562,7 +600,7 @@ export function register(on: On, options: PluginOptions) {
 
     let call = e
     if (!MODEL_FACING_TOOLS.has(e.tool)) {
-      const used = f.guardedIn(input)
+      const used = paused ? [] : f.guardedIn(input)
       if (used.length > 0) {
         const names = used.join(', ')
         return {
@@ -587,6 +625,14 @@ export function register(on: On, options: PluginOptions) {
     }
 
     const result = await next(call)
+    if (paused) {
+      // The model now holds this file whole, so writing it back loses nothing.
+      const isWhole = input.offset === undefined && input.limit === undefined
+      if (e.tool === 'Read' && typeof e.file_path === 'string' && isWhole && result.deny === undefined && result.isError !== true) {
+        filteredFiles.delete(pathKey(e.file_path))
+      }
+      return result
+    }
     const seen = newTally()
     const filtered = filterResult(f, result, seen)
     counted($, seen, toolSource(e.tool, input), 'add', undefined, e.agentId)
@@ -601,7 +647,7 @@ export function register(on: On, options: PluginOptions) {
   }))
 
   on('prompt.submit', async ($, e, next) => {
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null) return next(e)
 
     const tally = newTally()
@@ -617,7 +663,7 @@ export function register(on: On, options: PluginOptions) {
   )
 
   on('prompt.context', async ($, e, next) => {
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null) return next(e)
 
     const r = await next(f.informModel ? { ...e, blocks: [...e.blocks, { name: 'topicFilter', text: EXPLAINER }] } : e)
@@ -641,7 +687,7 @@ export function register(on: On, options: PluginOptions) {
 
   on('prompt.section', async ($, e, next) => {
     const r = await next(e)
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null) return r
     const tally = newTally()
     // A section left out now clears its entry: an empty tally does that.
@@ -653,7 +699,7 @@ export function register(on: On, options: PluginOptions) {
 
   on('prompt.attachment', async ($, e, next) => {
     const r = await next(e)
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null || r.text === null) return r
     const tally = newTally()
     const text = f.text(r.text, tally)
@@ -666,7 +712,7 @@ export function register(on: On, options: PluginOptions) {
 
   on('skill.prompt', async ($, e, next) => {
     const r = await next(e)
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null) return r
     const tally = newTally()
     const text = f.text(r.text, tally)
@@ -676,14 +722,14 @@ export function register(on: On, options: PluginOptions) {
 
   on('tool.describe', async ($, e, next) => {
     const r = await next(e)
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null) return r
     const text = f.text(r.description, newTally(), false)
     return text.changed ? { ...r, description: text.value } : r
   }).catch(() => ({ description: 'topic-filter failed while checking this description, so it is withheld.' }))
 
   on('session.receive', async ($, e, next) => {
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null) return next(e)
     const tally = newTally()
     const text = f.text(e.text, tally, false)
@@ -696,6 +742,11 @@ export function register(on: On, options: PluginOptions) {
   on('command.run', async ($, e, next) => {
     if (e.command === COMMAND) {
       const arg = e.args.trim()
+      if (PAUSE_ARGS.has(arg) || RESUME_ARGS.has(arg)) {
+        const { lines, context } = await setPaused($, PAUSE_ARGS.has(arg), e.origin?.kind)
+        for (const line of [...lines, '(Shown to you only; Claude does not see this.)']) $.ui.log(line)
+        return context === undefined ? {} : { context: [context] }
+      }
       if (arg === 'reload') {
         loaded = undefined
         const first = await current($)
@@ -728,7 +779,7 @@ export function register(on: On, options: PluginOptions) {
     }
 
     const r = await next(e)
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null || r.text === undefined) return r
     const tally = newTally()
     const text = f.text(r.text, tally)
@@ -746,9 +797,53 @@ export function register(on: On, options: PluginOptions) {
     const agent = agentId === undefined ? undefined : await sidebarLabel($, agentId)
     return sidebarView(
       { Box, Text },
-      { summary: hiddenLog.summary(agentId), ...(agent === undefined ? {} : { agent }), countsOnly: pluginOptions.sidebarCountsOnly === true },
+      {
+        summary: hiddenLog.summary(agentId),
+        ...(agent === undefined ? {} : { agent }),
+        countsOnly: pluginOptions.sidebarCountsOnly === true,
+        isPaused: paused,
+      },
     )
   })
+}
+
+const PAUSE_ARGS = new Set(['off', 'pause', 'stop'])
+const RESUME_ARGS = new Set(['on', 'resume', 'start'])
+
+/**
+ * Pauses or resumes filtering. Answers the lines the person sees, and a note
+ * for the model when the state changed, so it knows whether placeholders
+ * are still refused.
+ */
+async function setPaused($: EngineInterface, pause: boolean, origin: string | undefined): Promise<{ lines: string[]; context?: string }> {
+  if (pause && !MAY_PAUSE.has(origin ?? '')) {
+    return { lines: ['Only you can pause topic-filter, by typing /topic-filter off. It stays on.'] }
+  }
+  const l = await current($)
+  const was = paused
+  paused = pause
+  if (was !== pause) refilter($)
+
+  if (pause) {
+    return {
+      lines: was
+        ? ['topic-filter is already paused. /topic-filter on resumes it.']
+        : [
+            'topic-filter paused: nothing is hidden until /topic-filter on.',
+            'What Claude already read stays as it was. A restart, /clear or a reload turns it back on.',
+          ],
+      ...(was ? {} : { context: 'The user paused topic-filter: tool output is no longer filtered, and placeholders are no longer refused.' }),
+    }
+  }
+
+  const on =
+    l.filter === null
+      ? statusText()
+      : `Filter on: ${count(l.config?.lists.length ?? 0, 'list')}, ${count(l.filter.termCount, 'term')}.`
+  return {
+    lines: [was ? on : `${on} (It was not paused.)`],
+    ...(was ? { context: 'The user turned topic-filter back on: hidden items are filtered again, and placeholders are refused in tool calls.' } : {}),
+  }
 }
 
 /** Opens the sidebar, or closes it when it is open; says which, for the person. */

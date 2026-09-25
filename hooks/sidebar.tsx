@@ -25,6 +25,8 @@ export type SidebarInput = {
   agent?: string
   /** Counts by list only, never a word, a placeholder or a source. */
   countsOnly: boolean
+  /** Filtering is paused: the pane says so above everything else. */
+  isPaused?: boolean
 }
 
 /** "3 words, 2 lines": what a list or the session hid, in the person's terms. */
@@ -43,7 +45,7 @@ function hitRow(hit: Hit): string {
   return `  ${hit.term} ${parts.join(', ')}`
 }
 
-export function sidebarView({ Box, Text }: SidebarUi, { summary, agent, countsOnly }: SidebarInput): RenderElement {
+export function sidebarView({ Box, Text }: SidebarUi, { summary, agent, countsOnly, isPaused = false }: SidebarInput): RenderElement {
   const isEmpty = summary.replaced + summary.dropped === 0
   const isCondensed = countsOnly || summary.terms >= CONDENSE_AT
   const scope =
@@ -55,6 +57,11 @@ export function sidebarView({ Box, Text }: SidebarUi, { summary, agent, countsOn
 
   return (
     <Box flexDirection="column" paddingRight={1}>
+      {isPaused ? (
+        <Text key="paused" bold inverse wrap="truncate-end">
+          {' PAUSED: nothing is hidden. /topic-filter on '}
+        </Text>
+      ) : null}
       <Text key="total" bold wrap="truncate-end">
         {isEmpty ? 'Nothing hidden yet' : `Hidden: ${counts(summary)}`}
       </Text>

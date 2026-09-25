@@ -99,7 +99,9 @@ they drop out of every listing the model reads.
 
 Run `/topic-filter` in a session to see each list and where its terms come
 from, `/topic-filter packs` to see every topic pack and which lists use it,
-and `/topic-filter reload` after tagging repos. Both show counts, never terms.
+`/topic-filter off` and `on` to [pause and resume it](#pausing-it),
+and `/topic-filter reload` after tagging repos. The overview and the pack list
+show counts, never terms.
 Edits to the topics file and packs are picked up on their own.
 
 `/topic-filter log` shows what was hidden this session and where it came
@@ -161,6 +163,30 @@ shows only what that subagent read.
   it to counts by list, with no words, placeholders or file names.
 
 The sidebar is drawn on your screen only and never reaches Claude.
+
+### Pausing it
+
+`/topic-filter off` (or `pause`, `stop`) pauses filtering for the session:
+tool output reaches Claude whole and placeholders are no longer refused, so
+Claude can act on something hidden, such as deleting a tagged repo.
+`/topic-filter on` (or `resume`, `start`) turns it back on and says how many
+lists and terms it resumed with.
+
+- **Only you can pause it.** The command pauses only when you type it at the
+  prompt (or send it through Remote Control). Run by Claude, a subagent or
+  another plugin, it leaves the filter on. Anything may turn it back on.
+- **It never outlasts the session.** The pause is kept in memory only: a
+  restart, `/clear` or a reload of the plugin turns filtering back on.
+- **You can see it.** The status line reads `PAUSED` in place of the count,
+  and the sidebar says so at the top.
+- **Claude is told.** Pausing and resuming each leave Claude a one-line note,
+  so it knows whether placeholders will be refused.
+- **Two guards stay on.** The topics file is still out of reach, since reading
+  it would show the whole list. A file Claude read with content hidden still
+  cannot be overwritten whole until Claude reads it again, in full, while
+  paused.
+
+What Claude read before the pause keeps its placeholders.
 
 ## The topics file
 

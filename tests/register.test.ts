@@ -1,6 +1,8 @@
 import type { On } from 'claude-code'
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 
+import { sidebarView, SIDEBAR_ID } from '../hooks/sidebar.tsx'
+
 // The world beneath the plugin: a home directory, a topics file (or none),
 // pack files (the person's own and built-in ones), a store, and a status
 // line that goes nowhere.
@@ -44,9 +46,9 @@ const TOPICS = JSON.stringify({
 
 const GH_LIST = 'lperezmo/public-repo\tA public one\tpublic\nlperezmo/secret-repo\tHidden\tprivate\nlperezmo/notes\tAbout Teotihuacan\tpublic\n'
 
-function world(on: On, topics: string | null = TOPICS, packs: Packs = {}) {
+function world(on: On, topics: string | null = TOPICS, packs: Packs = {}, stored: Record<string, unknown> = {}) {
   mock.env(on, { HOME })
-  mock.store(on)
+  mock.store(on, stored)
   // An op hook answers `{ value }`, or `{ deny }` for the call to reject.
   on('fs.stat', async ($, e) => {
     const text = fileAt(e.path, topics, packs)
@@ -372,4 +374,169 @@ describe('/topic-filter log', () => {
     await $.command.run({ command: 'topic-filter', args: 'log' } as never)
     expect(shown.logs[0]).toBe('Nothing has been hidden this session yet.')
   })
+})
+
+/** The panes beneath the plugin: which are open, and every open and close asked for. */
+function panes(on: On) {
+  const state = { open: new Set<string>(), opened: [] as string[], closed: [] as string[] }
+  on('ui.panes', () => ({ value: [...state.open].map(id => ({ id, title: id, isShown: true, isFocused: false, isPlaced: true })) }) as never)
+  on('ui.open', ($, e) => {
+    state.open.add(e.id)
+    state.opened.push(e.id)
+    return { value: { isPlaced: true } } as never
+  })
+  on('ui.close', ($, e) => {
+    state.open.delete(e.id)
+    state.closed.push(e.id)
+    return { value: undefined } as never
+  })
+  return state
+}
+
+/** A tool call made in the subagent's loop; the typings leave `agentId` off a plugin's own calls. */
+const inAgent = <T extends object>(input: T): T => ({ ...input, agentId: 'agent-7' })
+
+/** The subagents beneath the plugin, as `$.agent.list()` answers. */
+function agents(on: On) {
+  on('agent.list', () => ({ value: [{ id: 'agent-7', description: 'Review the diff', type: 'general-purpose', status: 'running' }] }) as never)
+}
+
+/** The Pane props a surface hands the hook; `agentId` puts that subagent's transcript in view. */
+const paneProps = (agentId?: string) => ({
+  title: 'topic-filter',
+  isFocused: false,
+  bodyColumns: 48,
+  placement: 'dock' as const,
+  scroll: { offset: 0, bodyRows: 30 },
+  view: agentId === undefined ? {} : { agentId },
+})
+
+/** Every line of text a mounted drawing shows, in order. */
+async function textOf(ui: { findAll: (q: { type: string }) => Promise<{ text: string }[]> }): Promise<string[]> {
+  return (await ui.findAll({ type: 'Text' })).map(t => t.text)
+}
+
+const SURFACES = ['terminal', 'desktop'] as const
+
+describe('subagents', () => {
+  test("a subagent's tool output is filtered, and a placeholder there is refused", async ($, on) => {
+    world(on)
+    const ran = tools(on)
+    agents(on)
+    const r = await $.tool.call(inAgent({ tool: 'Bash', command: 'gh repo list' }))
+    const out = (r.result as { stdout: string }).stdout
+    expect(out.includes('secret-repo')).toBe(false)
+    expect(out.includes('Teotihuacan')).toBe(false)
+    const name = placeholderIn(out)!
+    const again = await $.tool.call(inAgent({ tool: 'Bash', command: `grep ${name} notes.md` }))
+    expect(again.deny).toMatch(/is a placeholder for a hidden item/)
+    expect(ran).toEqual(['Bash'])
+  })
+
+  test('/topic-filter log lists each subagent under its own heading', async ($, on) => {
+    const shown = world(on)
+    tools(on)
+    agents(on)
+    await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
+    await $.tool.call(inAgent({ tool: 'Bash', command: 'gh repo list --limit 5' }))
+    await $.command.run({ command: 'topic-filter', args: 'log' } as never)
+    const text = shown.logs.join('\n')
+    expect(text).toMatch(/Hidden as it came in \(most recent last\):\n {2}Bash gh repo list\n/)
+    expect(text).toMatch(/Hidden in subagent Review the diff \(most recent last\):\n {2}Bash gh repo list --limit 5\n/)
+  })
+})
+
+describe('sidebar', () => {
+  test('/topic-filter sidebar opens the pane, and closes it when open', async ($, on) => {
+    const shown = world(on)
+    const state = panes(on)
+    await $.command.run({ command: 'topic-filter', args: 'sidebar' } as never)
+    expect(state.opened).toEqual([SIDEBAR_ID])
+    expect(shown.logs[0]).toMatch(/^Sidebar open\./)
+    await $.command.run({ command: 'topic-filter', args: 'sidebar' } as never)
+    expect(state.closed).toEqual([SIDEBAR_ID])
+    expect(shown.logs.join('\n')).toMatch(/Sidebar closed\./)
+  })
+
+  test('turning the setting off closes the pane it had opened', async ($, on) => {
+    world(on, TOPICS, {}, { sidebar: true })
+    const state = panes(on)
+    tools(on)
+    await $.tool.call({ tool: 'Bash', command: 'ls' })
+    expect(state.closed).toEqual([SIDEBAR_ID])
+  })
+
+  test('a setting that was never on leaves panes alone', async ($, on) => {
+    world(on)
+    const state = panes(on)
+    tools(on)
+    await $.tool.call({ tool: 'Bash', command: 'ls' })
+    expect(state.opened).toEqual([])
+    expect(state.closed).toEqual([])
+  })
+
+  for (const surface of SURFACES) {
+    test(`draws each hidden term and where the last came from (${surface})`, async ($, on) => {
+      world(on)
+      tools(on)
+      agents(on)
+      await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
+      const ui = await $.ui.mount({ plugin: 'topic-filter', surface, component: 'Pane', requestId: SIDEBAR_ID, props: paneProps() })
+      const lines = await textOf(ui)
+      expect(lines[0]).toBe('Hidden: 1 word, 1 line dropped')
+      expect(lines[1]).toBe('Whole session')
+      expect(lines).toContain('repos')
+      expect(lines).toContain('  secret-repo 1 line dropped')
+      expect(lines.some(line => /^ {2}Teotihuacan -> [A-Z][a-z]+\d* x1$/.test(line))).toBe(true)
+      expect(lines.at(-1)).toBe('Latest: Bash gh repo list')
+    })
+
+    test(`with a subagent's transcript in view, draws only what it read (${surface})`, async ($, on) => {
+      world(on)
+      agents(on)
+      on('tool.call', async ($, e) => {
+        const out = e.tool === 'Bash' && e.command === 'cat plan.md' ? 'about secret-repo' : GH_LIST
+        return { result: { stdout: out, stderr: '', interrupted: false }, text: out }
+      })
+      await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
+      await $.tool.call(inAgent({ tool: 'Bash', command: 'cat plan.md' }))
+
+      const ui = await $.ui.mount({ plugin: 'topic-filter', surface, component: 'Pane', requestId: SIDEBAR_ID, props: paneProps() })
+      expect((await textOf(ui))[1]).toBe('Whole session, 1 subagent included')
+
+      // The person opens the subagent's transcript: the same pane, drawn for that view.
+      await ui.redraw(paneProps('agent-7'))
+      const one = await textOf(ui)
+      expect(one[0]).toBe('Hidden: 1 line dropped')
+      expect(one[1]).toBe('Subagent: Review the diff')
+      expect(one.some(line => line.includes('Teotihuacan'))).toBe(false)
+      expect(one.at(-1)).toBe('Latest: Bash cat plan.md')
+    })
+
+    test(`counts by list from 30 terms on, and counts only when asked (${surface})`, async ($, on) => {
+      world(on)
+      // A pane of another id reaches the hooks beneath, which draw the view
+      // with a summary of their own: the settings cannot be changed in a test.
+      const hits = Array.from({ length: 30 }, (_, i) => ({ term: `Term${i}`, placeholder: `Name${i}`, list: 'pack demo', replaced: 1, dropped: 0 }))
+      const summary = { replaced: 30, dropped: 0, terms: 30, lists: [{ list: 'pack demo', replaced: 30, dropped: 0, hits }], latest: 'Read notes.md', agents: [] }
+      let countsOnly = false
+      on('ui.render', { component: 'Pane' }, async ($, e) => {
+        const { Box, Text } = await $.ui.resolve(e)
+        return sidebarView({ Box, Text }, { summary, countsOnly })
+      })
+
+      const ui = await $.ui.mount({ plugin: 'topic-filter', surface, component: 'Pane', requestId: 'other', props: paneProps() })
+      const condensed = await textOf(ui)
+      expect(condensed).toContain('pack demo: 30 words (30 terms)')
+      expect(condensed.some(line => line.includes('Term1'))).toBe(false)
+      expect(condensed).toContain('30+ terms, so counted by list. /topic-filter log names each one.')
+      expect(condensed.at(-1)).toBe('Latest: Read notes.md')
+
+      countsOnly = true
+      summary.lists[0]!.hits = hits.slice(0, 2)
+      await ui.redraw()
+      const bare = await textOf(ui)
+      expect(bare).toEqual(['Hidden: 30 words', 'Whole session', 'pack demo: 30 words (2 terms)'])
+    })
+  }
 })

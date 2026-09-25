@@ -36,6 +36,8 @@ plugin's rows. Enter or Space flips a switch or edits a field:
 | GitHub topics | `claude-hidden` | Comma-separated topics that mark a repo as hidden |
 | Hide anthropology, biology, chemistry, cybersecurity, genetics | off | One switch per [built-in pack](#topic-packs) |
 | Other packs | empty | Names of [your own packs](#topic-packs), comma-separated |
+| Sidebar | off | Opens [the sidebar](#the-sidebar) at every start |
+| Sidebar: counts only | off | The sidebar shows counts by list, never a word or file name |
 | Extra words to hide | empty | Comma-separated words or names; kept in secure storage, not in `settings.json` |
 | Topics file (advanced) | empty | Where [the topics file](#the-topics-file) lives, if you want one |
 
@@ -131,6 +133,34 @@ which names real terms:
 
 The status line's `M hidden` counts each hidden word and each dropped line,
 not distinct terms.
+
+What a subagent reads is filtered the same way, and its placeholders are
+refused in its tool calls too. The log lists each subagent under its own
+heading.
+
+### The sidebar
+
+`/topic-filter sidebar` opens a pane that shows what has been hidden so far
+and updates as it happens: each list, the terms it hid with their
+placeholders, the lines each term dropped, and where the latest hit came
+from. From 30 distinct terms on, it counts by list instead
+(`pack chemistry: 42 words (17 terms)`), and `/topic-filter log` still names
+each one. Open a subagent's transcript from the tasks list and the sidebar
+shows only what that subagent read.
+
+- **Where it shows.** In the fullscreen layout it docks beside the transcript;
+  otherwise it opens above the prompt. Opened by the setting rather than the
+  command, it waits for a terminal at least 144 columns wide.
+- **Next to other plugins' panes.** Claude Code shows one pane at a time and
+  turns the others into tabs: click a tab to switch, or press ctrl+x tab to
+  move into the panes, then Tab to a tab and Enter. ctrl+x x (or the pane's
+  close mark) closes it, and `/topic-filter sidebar` toggles it.
+- **Every start.** The **Sidebar** switch in `/config` opens it at every
+  start. Turning the switch off closes it.
+- **Screen sharing.** It shows the real words. **Sidebar: counts only** keeps
+  it to counts by list, with no words, placeholders or file names.
+
+The sidebar is drawn on your screen only and never reaches Claude.
 
 ## The topics file
 

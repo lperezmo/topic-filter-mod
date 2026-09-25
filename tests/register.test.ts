@@ -599,11 +599,11 @@ describe('pause', () => {
   test('only the person can pause: a command from anywhere else leaves the filter on', async ($, on) => {
     const shown = world(on)
     tools(on)
-    for (const origin of [undefined, { kind: 'plugin', name: 'other' }, { kind: 'task-notification' }, { kind: 'peer' }]) {
+    for (const origin of [undefined, { kind: 'plugin', name: 'other' }, { kind: 'task-notification' }, { kind: 'peer' }, { kind: 'bridge' }]) {
       const r = await $.command.run({ command: 'topic-filter', args: 'off', ...(origin === undefined ? {} : { origin }) } as never)
       expect(r.context).toBeUndefined()
     }
-    expect(shown.logs.filter(line => line.startsWith('Only you can pause'))).toHaveLength(4)
+    expect(shown.logs.filter(line => line.startsWith('Only you can pause'))).toHaveLength(5)
     const r = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
     expect((r.result as { stdout: string }).stdout.includes('secret-repo')).toBe(false)
   })
@@ -640,6 +640,36 @@ describe('pause', () => {
     const whole = await $.tool.call({ tool: 'Write', file_path: FILE, content: 'x' })
     expect(whole.deny).toBeUndefined()
     expect(ran).toEqual(['Read', 'Read', 'Read', 'Write'])
+  })
+
+  test('paused while the settings are broken, the topics file stays out of reach', async ($, on) => {
+    world(on, '{ not json')
+    const ran = tools(on)
+    await $.command.run(typed('off'))
+    const own = await $.tool.call({ tool: 'Read', file_path: TOPICS_PATH })
+    expect(own.deny).toMatch(/holds the list of hidden topics/)
+    await $.tool.call({ tool: 'Bash', command: 'ls' })
+    expect(ran).toEqual(['Bash'])
+  })
+
+  test('a long file cut at the line cap is not read whole', async ($, on) => {
+    world(on)
+    const FILE = 'C:/work/long.md'
+    const content = '# Notes\nsecret-repo has the photos.\n'
+    const ran: string[] = []
+    on('tool.call', async ($, e) => {
+      ran.push(e.tool)
+      if (e.tool === 'Read') {
+        return { result: { type: 'text', file: { filePath: FILE, content, numLines: 2, startLine: 1, totalLines: 5000 } }, text: content } as never
+      }
+      return { result: { filePath: FILE }, text: 'written' } as never
+    })
+    await $.tool.call({ tool: 'Read', file_path: FILE })
+    await $.command.run(typed('off'))
+    await $.tool.call({ tool: 'Read', file_path: FILE })
+    const write = await $.tool.call({ tool: 'Write', file_path: FILE, content: 'x' })
+    expect(write.deny).toMatch(/overwriting it whole would delete/)
+    expect(ran).toEqual(['Read', 'Read'])
   })
 
   test('/clear ends the pause', async ($, on) => {

@@ -99,8 +99,11 @@ const hiddenLog = new HiddenLog()
  */
 let paused = false
 
-/** Who may pause: the person at the prompt, here or through Remote Control. Resuming is open to anyone. */
-const MAY_PAUSE = new Set(['composer', 'bridge'])
+/**
+ * Who may pause: the person at this terminal's prompt. Remote Control is left
+ * out, as the engine cannot attest its sender is the owner. Anyone may resume.
+ */
+const MAY_PAUSE = new Set(['composer'])
 
 /** Whether this module has matched the sidebar to its setting yet: once per load, as a /config change reloads it. */
 let sidebarSynced = false
@@ -578,28 +581,36 @@ export function register(on: On, options: PluginOptions) {
   on('tool.call', async ($, e, next) => {
     const l = await current($)
     const f = l.filter
-    if (f === null) {
-      if (l.error !== undefined && !paused) {
-        // The model is told there is a problem, never what it is: the
-        // message names packs, which would say what is being hidden.
-        return {
-          deny:
-            "topic-filter: tool calls are paused because the user's topic-filter settings have a problem. " +
-            'Ask the user to run /topic-filter to see it.',
-        }
+    const input = e as unknown as Record<string, unknown>
+
+    // These two hold while paused too: the list itself stays out of reach, and
+    // a file the model holds a filtered copy of cannot be overwritten whole.
+    // A topics file that failed to load still holds the list.
+    if ((f !== null || l.error !== undefined) && mentionsPath(input, l.path)) {
+      return { deny: 'topic-filter: that path holds the list of hidden topics, which this session may not read or change.' }
+    }
+    // Edit changes only the text it names, and fails if that text spans
+    // something hidden, so it stays allowed.
+    if (e.tool === 'Write' && typeof e.file_path === 'string' && filteredFiles.has(pathKey(e.file_path))) {
+      return {
+        deny:
+          'topic-filter: this file holds content hidden from this session, so overwriting it whole would delete ' +
+          'that content. Use Edit to change specific parts instead.',
       }
-      return next(e)
     }
 
-    // Paused, the list itself stays out of reach, and a file the model holds
-    // a filtered copy of still cannot be overwritten whole; the rest is off.
-    const input = e as unknown as Record<string, unknown>
-    if (mentionsPath(input, l.path)) {
-      return { deny: 'topic-filter: that path holds the list of hidden topics, which this session may not read or change.' }
+    if (f === null && l.error !== undefined && !paused) {
+      // The model is told there is a problem, never what it is: the
+      // message names packs, which would say what is being hidden.
+      return {
+        deny:
+          "topic-filter: tool calls are paused because the user's topic-filter settings have a problem. " +
+          'Ask the user to run /topic-filter to see it.',
+      }
     }
 
     let call = e
-    if (!MODEL_FACING_TOOLS.has(e.tool)) {
+    if (f !== null && !MODEL_FACING_TOOLS.has(e.tool)) {
       const used = paused ? [] : f.guardedIn(input)
       if (used.length > 0) {
         const names = used.join(', ')
@@ -613,22 +624,10 @@ export function register(on: On, options: PluginOptions) {
       if (restored.changed) call = restored.value as typeof e
     }
 
-    // A file read with lines dropped or terms hidden cannot be written back
-    // whole: the model's copy lacks what it never saw. Edit changes only the
-    // text it names, and fails if that text spans something hidden.
-    if (e.tool === 'Write' && typeof e.file_path === 'string' && filteredFiles.has(pathKey(e.file_path))) {
-      return {
-        deny:
-          'topic-filter: this file holds content hidden from this session, so overwriting it whole would delete ' +
-          'that content. Use Edit to change specific parts instead.',
-      }
-    }
-
     const result = await next(call)
-    if (paused) {
-      // The model now holds this file whole, so writing it back loses nothing.
-      const isWhole = input.offset === undefined && input.limit === undefined
-      if (e.tool === 'Read' && typeof e.file_path === 'string' && isWhole && result.deny === undefined && result.isError !== true) {
+    if (paused || f === null) {
+      // Read whole while paused, the file can be written back without loss.
+      if (paused && e.tool === 'Read' && typeof e.file_path === 'string' && readWhole(input, result)) {
         filteredFiles.delete(pathKey(e.file_path))
       }
       return result
@@ -898,6 +897,17 @@ function filterResult(f: Filter, r: ToolCallResult, seen: Tally): ToolCallResult
   const all = note === undefined ? kept : [...kept, note]
   // Without `ref`, core maps the filtered record for the model afresh.
   return all.length > 0 ? { result: record.value, context: all } : { result: record.value }
+}
+
+/**
+ * Whether a Read answered the whole file: no range asked, and every line
+ * returned (a long file is cut at the engine's line cap).
+ */
+function readWhole(input: Record<string, unknown>, r: ToolCallResult): boolean {
+  if (r.deny !== undefined || r.isError === true) return false
+  if (input.offset !== undefined || input.limit !== undefined || input.pages !== undefined) return false
+  const file = (r.result as { file?: { numLines?: unknown; totalLines?: unknown } } | undefined)?.file
+  return typeof file?.numLines === 'number' && file.numLines === file.totalLines
 }
 
 /** Whether a tool call names the topics file (best effort: a name match, not a sandbox). */

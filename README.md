@@ -173,8 +173,9 @@ Claude can act on something hidden, such as deleting a tagged repo.
 lists and terms it resumed with.
 
 - **Only you can pause it.** The command pauses only when you type it at the
-  prompt (or send it through Remote Control). Run by Claude, a subagent or
-  another plugin, it leaves the filter on. Anything may turn it back on.
+  prompt. Sent through Remote Control, whose sender Claude Code cannot
+  confirm, or run by Claude, a subagent or another plugin, it leaves the
+  filter on. Anything may turn it back on.
 - **It never outlasts the session.** The pause is kept in memory only: a
   restart, `/clear` or a reload of the plugin turns filtering back on.
 - **You can see it.** The status line reads `PAUSED` in place of the count,

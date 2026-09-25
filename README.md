@@ -3,37 +3,53 @@ Filter topics out of claude so you can focus on work that is allowed by Anthropi
 
 `topic-filter` is a [Claude Mod](https://github.com/anthropics/claude-code/tree/main/mods)
 (a Claude Code plugin built on function hooks) that hides chosen topics from
-the model. You list terms; before the model reads anything, each term becomes a
-stable placeholder name (`Teotihuacan` becomes `Teacup`), or the lines that
-mention it disappear. You keep your repos, notes and memory as they are; the
-session just cannot see those parts.
-
-The motivating case: `gh repo list` shows repositories a session has no reason
-to see. Tag them on GitHub, and they drop out of every listing the model reads.
-
-> Function hooks are early access. This mod was built and tested against
-> Claude Code 2.1.282, and the API may change between releases.
+the model. Before the model reads anything, each listed term becomes a stable
+placeholder (`Teotihuacan` becomes `Teacup`), or the lines that mention it
+disappear. Your repos, notes and memory stay as they are.
 
 ## Install
 
-Function hooks must be on. Add this to the `env` block of
-`~/.claude/settings.json` (or export it in your shell):
+**1. Turn on function hooks.** They are early access. Add this to
+`~/.claude/settings.json` (merge the key into an existing `env` block if you
+have one):
 
 ```json
 { "env": { "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1" } }
 ```
 
-Then add this repository as a marketplace and install the plugin:
+**2. Install the plugin.** This repository is its own marketplace:
 
 ```
 claude plugin marketplace add lperezmo/topic-filter-mod
 claude plugin install topic-filter@topic-filter-mod
 ```
 
-Nothing happens until a topics file exists. Copy
-[`examples/topics.example.json`](examples/topics.example.json) to
-`~/.claude/topic-filter/topics.json` and edit it. To keep it elsewhere, set the
-plugin's `configPath` option in `/config`.
+Or from inside Claude Code: `/plugin marketplace add lperezmo/topic-filter-mod`,
+then `/plugin install topic-filter@topic-filter-mod`.
+
+**3. Say what to hide** in `~/.claude/topic-filter/topics.json`. A built-in
+[topic pack](#topic-packs), your own words, or both:
+
+```json
+{ "lists": [{ "name": "science", "pack": "chemistry", "terms": ["my-secret-project"] }] }
+```
+
+**4. Start a new session.** The status line shows
+`topic-filter: on, N terms, M hidden`.
+
+Built-in packs: `anthropology`, `biology`, `chemistry`, `cybersecurity`,
+`genetics`. A fuller example with every option is in
+[`examples/topics.example.json`](examples/topics.example.json). To keep the
+topics file elsewhere, set the plugin's `configPath` option in `/config`.
+
+> Built and tested against Claude Code 2.1.282. The function hooks API may
+> change between releases.
+
+## Using it
+
+The motivating case: `gh repo list` shows repositories a session has no reason
+to see. [Tag them on GitHub](#hiding-repositories-without-deleting-them), and
+they drop out of every listing the model reads.
 
 Run `/topic-filter` in a session to see each list and where its terms come
 from, `/topic-filter packs` to see every topic pack and which lists use it,
@@ -41,7 +57,6 @@ and `/topic-filter reload` after tagging repos. Both show counts, never terms,
 and are shown to you only: they name packs and lists, which would tell Claude
 what is being hidden. Edits to the topics file and packs are picked up on
 their own.
-The status line shows `topic-filter: on, N terms, M hidden`.
 
 ## The topics file
 
@@ -100,9 +115,18 @@ toast name the missing pack, and `/topic-filter` suggests the closest real
 one ("Did you mean paleontology?") and lists what is available. Claude only
 hears that the settings have a problem, not which pack.
 
-**Built-in packs** ship in this repository's [`packs/`](packs) folder and are
-built by the script in [`tools/packs/`](tools/packs) from Wikipedia and
-Wiktionary categories, word-frequency data and a dry run against ordinary
+**Built-in packs** ship in this repository's [`packs/`](packs) folder:
+
+| Pack | Terms | Covers |
+| --- | --- | --- |
+| `anthropology` | 2,167 | Ancient Mesoamerican, Andean and Egyptian sites, civilizations, rulers and deities; anthropology and archaeology vocabulary |
+| `biology` | 270 | Molecular biology techniques, cellular processes, anatomical terms |
+| `chemistry` | 940 | Chemical elements, named reactions, functional groups, laboratory equipment |
+| `cybersecurity` | 312 | Named malware, computer worms and hacker groups; security and cryptography vocabulary |
+| `genetics` | 2,591 | Genetic disorders and syndromes; genetics and heredity vocabulary |
+
+They are built by the script in [`tools/packs/`](tools/packs) from Wikipedia
+and Wiktionary categories, word-frequency data and a dry run against ordinary
 code, with a review report per pack in `tools/packs/reports/`.
 
 **Your own packs** go in `~/.claude/topic-filter/packs/<name>.json`. A pack
@@ -217,9 +241,8 @@ you typed.
 
 ## Roadmap
 
-- Build term lists from a category: Wikidata from a few examples (the classes
-  they share), WordNet, and a glossary from a local model, then pruned by a
-  cheap classifier, producing a candidate list you review.
+- More built-in packs, and a larger codename word list so big packs get fewer
+  numbered placeholders (`Teacup14`).
 - An optional classifier for text that is about a topic without using a
   listed word (a local GLiNER server, or Jev), withholding whole chunks.
 - Show you the real names in the transcript view while the model sees

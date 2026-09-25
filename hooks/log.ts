@@ -9,6 +9,9 @@ import type { Hit, Tally } from './redact.ts'
 /** Past this many passing sources the oldest are forgotten. */
 const MAX_SOURCES = 200
 
+/** Past this many hits the feed forgets the oldest. */
+const MAX_FEED = 100
+
 /** Past this many terms a source's entry says how many more there were. */
 const MAX_TERMS_SHOWN = 20
 
@@ -36,11 +39,45 @@ export function label(text: string): string {
  */
 export type LogMode = 'add' | 'replace' | 'standing'
 
-/** One source's hits; `agent` is the subagent whose loop read it, absent for the main conversation. */
-type Entry = { label: string; agent?: string; hits: Map<string, Hit> }
+/** What kind of source a pass read, for the sidebar's bars. */
+export type SourceKind = 'files' | 'prompts' | 'web' | 'commands' | 'searches' | 'skills' | 'context' | 'tools'
+
+/** Each kind as the sidebar names it. */
+export const KIND_LABELS: Record<SourceKind, string> = {
+  files: 'Files',
+  prompts: 'Prompts',
+  web: 'Web',
+  commands: 'Commands',
+  searches: 'Searches',
+  skills: 'Skills',
+  context: 'Context',
+  tools: 'Other tools',
+}
+
+/**
+ * One source's hits; `agent` is the subagent whose loop read it, absent for
+ * the main conversation, and `at` when it last hid something new.
+ */
+type Entry = { label: string; agent?: string; kind: SourceKind; at: number; hits: Map<string, Hit> }
+
+/** A source a term was hidden in, and how many times. */
+export type TermSource = { label: string; n: number }
+
+/** A term's share of a summary, with the sources it was hidden in, most first. */
+export type TermSummary = Hit & { sources: TermSource[] }
 
 /** One list's share of a summary: its hits merged across sources, most hidden first. */
-export type ListSummary = { list: string; replaced: number; dropped: number; hits: Hit[] }
+export type ListSummary = { list: string; replaced: number; dropped: number; hits: TermSummary[] }
+
+/** One pass that hid something, as the feed shows it. */
+export type FeedItem = {
+  at: number
+  label: string
+  agent?: string
+  replaced: number
+  dropped: number
+  hits: { list: string; term: string; n: number }[]
+}
 
 /** What the sidebar draws: totals, each list's share, and where the last hit came from. */
 export type Summary = {
@@ -53,6 +90,14 @@ export type Summary = {
   latest?: string
   /** The subagents with hits, ordered by their least recently hidden source. */
   agents: string[]
+  /** How much each kind of source hid, most first; kinds that hid nothing are left out. */
+  kinds: { kind: SourceKind; n: number }[]
+  /** How many sources hid something. */
+  sources: number
+  /** When something was last hidden, if ever. */
+  lastAt?: number
+  /** The passes that hid something, newest first. */
+  feed: FeedItem[]
 }
 
 export class HiddenLog {
@@ -62,13 +107,18 @@ export class HiddenLog {
   private readonly standing = new Map<string, Entry>()
   /** Passing sources forgotten to stay under the cap. */
   private forgotten = 0
+  /** Every pass that hid something new, oldest first. */
+  private readonly feed: FeedItem[] = []
+
+  /** `now` tells the time; tests pass their own. */
+  constructor(private readonly now: () => number = () => Date.now()) {}
 
   /**
    * Adds one pass's hits under `source`, shown cut to one line; `key` tells
    * sources apart when their labels could match (a long path cut short), and
    * `agent` names the subagent whose loop read it.
    */
-  record(source: string, tally: Tally, mode: LogMode = 'add', key: string = source, agent?: string): void {
+  record(source: string, tally: Tally, mode: LogMode = 'add', key: string = source, agent?: string, kind: SourceKind = 'tools'): void {
     const entries = mode === 'standing' ? this.standing : this.passing
     key = agent === undefined ? key : `${agent}\u0000${key}`
     const previous = entries.get(key)
@@ -83,9 +133,17 @@ export class HiddenLog {
       // The newest placeholder and list name stand: settings may have changed since.
       hits.set(term, had === undefined ? { ...hit } : { ...hit, replaced: had.replaced + hit.replaced, dropped: had.dropped + hit.dropped })
     }
+    // A pass that only repeats what a standing or replaced source already
+    // hid (the same system prompt, every request) is not news: it keeps its
+    // time and stays out of the feed.
+    const isNew = mode === 'add' || previous === undefined
+    const at = isNew ? this.now() : previous.at
+    if (isNew) this.remember(label(source), tally, at, agent)
+
     // Newest last: a source hidden again moves to the end.
     entries.delete(key)
-    entries.set(key, agent === undefined ? { label: label(source), hits } : { label: label(source), agent, hits })
+    const entry: Entry = { label: label(source), kind, at, hits }
+    entries.set(key, agent === undefined ? entry : { ...entry, agent })
 
     while (this.passing.size > MAX_SOURCES) {
       this.passing.delete(this.passing.keys().next().value!)
@@ -93,10 +151,19 @@ export class HiddenLog {
     }
   }
 
-  /** Empties what passed; what stands in every request stays, as it is still hidden there. */
+  private remember(source: string, tally: Tally, at: number, agent?: string): void {
+    const hits = [...tally.hits.values()].map(hit => ({ list: hit.list, term: hit.term, n: hit.replaced + hit.dropped }))
+    hits.sort((a, b) => b.n - a.n)
+    const item: FeedItem = { at, label: source, replaced: tally.replaced, dropped: tally.dropped, hits }
+    this.feed.push(agent === undefined ? item : { ...item, agent })
+    if (this.feed.length > MAX_FEED) this.feed.shift()
+  }
+
+  /** Empties what passed and the feed; what stands in every request stays, as it is still hidden there. */
   clear(): void {
     this.passing.clear()
     this.forgotten = 0
+    this.feed.length = 0
   }
 
   /** The log as the person reads it; `agentName` labels a subagent by its id. */
@@ -134,12 +201,27 @@ export class HiddenLog {
     const inScope = (entry: Entry) => agent === undefined || entry.agent === agent
     const entries = [...(agent === undefined ? this.standing.values() : []), ...this.passing.values()].filter(inScope)
 
-    const byTerm = new Map<string, Hit>()
+    const weight = (x: { replaced: number; dropped: number }) => x.replaced + x.dropped
+    const byTerm = new Map<string, TermSummary>()
+    const byTermSource = new Map<string, Map<string, number>>()
+    const byKind = new Map<SourceKind, number>()
     for (const entry of entries) {
       for (const [term, hit] of entry.hits) {
         const had = byTerm.get(term)
-        byTerm.set(term, had === undefined ? { ...hit } : { ...hit, replaced: had.replaced + hit.replaced, dropped: had.dropped + hit.dropped })
+        byTerm.set(
+          term,
+          had === undefined
+            ? { ...hit, sources: [] }
+            : { ...hit, sources: [], replaced: had.replaced + hit.replaced, dropped: had.dropped + hit.dropped },
+        )
+        const sources = byTermSource.get(term) ?? new Map<string, number>()
+        sources.set(entry.label, (sources.get(entry.label) ?? 0) + weight(hit))
+        byTermSource.set(term, sources)
+        byKind.set(entry.kind, (byKind.get(entry.kind) ?? 0) + weight(hit))
       }
+    }
+    for (const [term, hit] of byTerm) {
+      hit.sources = [...(byTermSource.get(term) ?? [])].map(([label, n]) => ({ label, n })).sort((a, b) => b.n - a.n)
     }
 
     const byList = new Map<string, ListSummary>()
@@ -150,12 +232,13 @@ export class HiddenLog {
       list.hits.push(hit)
       byList.set(hit.list, list)
     }
-    const weight = (x: { replaced: number; dropped: number }) => x.replaced + x.dropped
     const lists = [...byList.values()].sort((a, b) => weight(b) - weight(a))
     for (const list of lists) list.hits.sort((a, b) => weight(b) - weight(a))
 
     const passing = [...this.passing.values()].filter(inScope)
     const agents = [...new Set([...this.passing.values()].flatMap(entry => (entry.agent === undefined ? [] : [entry.agent])))]
+    const lastAt = entries.reduce<number | undefined>((at, entry) => (at === undefined || entry.at > at ? entry.at : at), undefined)
+    const feed = this.feed.filter(item => agent === undefined || item.agent === agent).reverse()
     return {
       replaced: lists.reduce((n, list) => n + list.replaced, 0),
       dropped: lists.reduce((n, list) => n + list.dropped, 0),
@@ -163,6 +246,10 @@ export class HiddenLog {
       lists,
       ...(passing.length > 0 ? { latest: passing.at(-1)!.label } : {}),
       agents,
+      kinds: [...byKind].map(([kind, n]) => ({ kind, n })).sort((a, b) => b.n - a.n),
+      sources: entries.length,
+      ...(lastAt === undefined ? {} : { lastAt }),
+      feed,
     }
   }
 }

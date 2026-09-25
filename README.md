@@ -7,6 +7,12 @@ the model. Before the model reads anything, each listed term becomes a stable
 placeholder (`Teotihuacan` becomes `Teacup`), or the lines that mention it
 disappear. Your repos, notes and memory stay as they are.
 
+![A Claude Code session summarizing a demo project: its reply uses codenames in place of the hidden terms, while the sidebar lists each hidden term, its codename, and where the hits came from](images/live_filter.png)
+
+*Claude answers in codenames; the sidebar, shown to you only, maps each one back
+and counts where it was hidden. The dim `topic-filter: 50 hidden` sits in the
+prompt footer.*
+
 ## Install
 
 **1. Turn on function hooks.** They are early access. Add this to
@@ -29,6 +35,8 @@ then `/plugin install topic-filter@topic-filter-mod`.
 
 **3. Choose what to hide.** Run `/config` and type `topic-filter` to find the
 plugin's rows. Enter or Space flips a switch or edits a field:
+
+![The /config screen listing topic-filter's rows: GitHub tag hiding, one switch per built-in pack, other packs, the sidebar switches and the topics file](images/hide_config.png)
 
 | Setting | Default | What it does |
 | --- | --- | --- |

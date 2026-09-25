@@ -260,6 +260,30 @@ Read these before relying on it.
   so they show which topics you hide (the extra words are in secure storage).
   Only the topics file is guarded.
 
+## Troubleshooting
+
+- **No status line, and `/topic-filter` is not a command.** Function hooks are
+  off or the session predates the install. Check that
+  `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` is `"1"` in the `env` block of
+  `~/.claude/settings.json`, then restart Claude Code. `/plugin` has an Errors
+  tab, and `claude --debug` logs why a plugin did not load.
+- **Status says `off, nothing chosen to hide`.** Nothing is switched on. Open
+  `/config` and search `topic-filter`.
+- **Status says `BLOCKING tool calls`.** A setting or the topics file has a
+  problem, such as a pack name that does not exist, and tool calls pause until
+  it is fixed so nothing leaks. `/topic-filter` shows the reason and suggests
+  the closest pack name.
+- **A tagged repo still shows up.** Run `/topic-filter reload`: tagged repos are
+  looked up when a session starts. If the status line mentions `gh could not
+  list topic`, check `gh auth status`.
+- **A switch set in `/plugin` did not take.** That screen needs the word
+  `true`; anything else is saved as false. `/config` has real switches.
+- **Claude says a command was refused because of a placeholder.** That is the
+  guard working: a placeholder stands for something hidden, so Claude cannot
+  search for it or write it into a file. Leave it out, or do that step yourself.
+- **Still on an old version.** See [Update](#update): auto-update is off for
+  third-party marketplaces until you turn it on, and a restart is needed.
+
 ## Development
 
 ```

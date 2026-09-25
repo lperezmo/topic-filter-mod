@@ -13,7 +13,6 @@
       "name": "topic-filter",
       "source": "./",
       "description": "Hide chosen topics from Claude: listed terms become stable placeholder names (or their lines are dropped) before the model reads them.",
-      "version": "0.1.0",
       "category": "security"
     }
   ]

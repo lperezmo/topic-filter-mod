@@ -55,8 +55,9 @@ then `/topic-filter reload` in a running session.
 
 **4. Restart Claude Code** once after installing: sessions that were already
 running do not load the plugin. The status line then shows
-`on, N terms, M hidden`, and `/topic-filter` shows what is hidden and where
-each part comes from (counts only, shown to you only).
+`on, N terms, M hidden`, `/topic-filter` shows what is set to be hidden and
+where each part comes from, and `/topic-filter log` shows what was actually
+hidden and where (both shown to you only).
 
 The [topics file](#the-topics-file) is optional. Use it for what the settings
 cannot express: drop-line or restore modes for your own words, several lists,
@@ -96,10 +97,40 @@ they drop out of every listing the model reads.
 
 Run `/topic-filter` in a session to see each list and where its terms come
 from, `/topic-filter packs` to see every topic pack and which lists use it,
-and `/topic-filter reload` after tagging repos. Both show counts, never terms,
-and are shown to you only: they name packs and lists, which would tell Claude
-what is being hidden. Edits to the topics file and packs are picked up on
-their own.
+and `/topic-filter reload` after tagging repos. Both show counts, never terms.
+Edits to the topics file and packs are picked up on their own.
+
+`/topic-filter log` shows what was hidden this session and where it came
+from: each source (a file read, a command, CLAUDE.md, your prompt) with the
+real terms, the placeholder each became, and how many lines each drop-line
+term removed. The dropped lines themselves are not shown.
+
+```
+Hidden in what Claude reads with every request (system prompt, CLAUDE.md):
+  C:/work/CLAUDE.md
+      Teotihuacan -> Marzipan (x1)
+Hidden as it came in (most recent last):
+  Bash gh repo list
+      2 lines dropped by "repos tagged claude-hidden": secret-repo (x1), old-thesis (x1)
+  Read C:/notes/trip.md
+      Teotihuacan -> Marzipan (x3)
+```
+
+The log is kept in memory only and ends with the session. The mod never
+writes it to a file of its own, since that would be a second copy of what you
+are hiding. `/topic-filter log clear` empties the second part sooner; the
+first stays, as that text is still in every request.
+
+Every `/topic-filter` output is shown to you only: it names packs, lists and
+terms, which would tell Claude what is being hidden. Two caveats for the log,
+which names real terms:
+
+- Claude Code copies every such line into its debug log, so with `--debug` or
+  `--debug-file` the terms end up in that file.
+- Another plugin that hooks `ui.log` sees the lines too.
+
+The status line's `M hidden` counts each hidden word and each dropped line,
+not distinct terms.
 
 ## The topics file
 

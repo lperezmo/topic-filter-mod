@@ -20,6 +20,7 @@
 import type { EngineInterface, FsEntry, On, PluginOptions, ToolCallResult } from 'claude-code'
 
 import { closestName, ConfigError, optionLists, parseConfig, parsePack, SLUG, type Config, type Pack } from './config.ts'
+import { HiddenLog, type LogMode } from './log.ts'
 import { fnv1a } from './placeholders.ts'
 import { Filter, forEachString, newTally, noteFor, type Tally } from './redact.ts'
 
@@ -86,6 +87,21 @@ let githubProblem: string | undefined
 
 /** Items hidden since the session started, for the status line. */
 let hiddenCount = 0
+
+/** What was hidden and where, for `/topic-filter log`: memory only, shown to the person only. */
+const hiddenLog = new HiddenLog()
+
+/** The input fields that say what a tool call was about, in order of preference. */
+const SOURCE_KEYS = ['file_path', 'notebook_path', 'command', 'url', 'pattern', 'query', 'path', 'description']
+
+/** A tool call as the log names it: the tool and what it was about. */
+function toolSource(tool: string, input: Record<string, unknown>): string {
+  for (const key of SOURCE_KEYS) {
+    const value = input[key]
+    if (typeof value === 'string' && value.trim() !== '') return `${tool} ${value}`
+  }
+  return tool
+}
 
 /** The `configPath` option; empty means the default under the home directory. */
 let configured = ''
@@ -411,7 +427,9 @@ function showStatus($: EngineInterface): void {
   $.ui.status(statusText().replace(/^topic-filter: /, ''))
 }
 
-function counted($: EngineInterface, tally: Tally): void {
+/** Counts a pass for the status line and logs it under `source` (see HiddenLog.record for `mode` and `key`). */
+function counted($: EngineInterface, tally: Tally, source: string, mode: LogMode = 'add', key?: string): void {
+  hiddenLog.record(source, tally, mode, key)
   const n = tally.replaced + tally.dropped
   if (n === 0) return
   hiddenCount += n
@@ -441,7 +459,7 @@ function describe(l: Loaded): string[] {
     })
     if ((l.filter?.skippedTerms ?? 0) > 0) lines.push(`${l.filter?.skippedTerms} terms were too short to use.`)
   }
-  lines.push('Run /topic-filter packs to see every pack.')
+  lines.push('Run /topic-filter packs to see every pack, and /topic-filter log to see what was hidden and where.')
   return lines
 }
 
@@ -453,8 +471,9 @@ export function register(on: On, options: PluginOptions) {
     try {
       await $.command.register({
         name: COMMAND,
-        description: 'Show what topic-filter is hiding (counts only); `packs` lists topic packs; `reload` re-reads everything',
-        argumentHint: '[reload|packs]',
+        description:
+          'Show what topic-filter is set to hide; `log` lists what was hidden and where; `packs` lists topic packs; `reload` re-reads everything',
+        argumentHint: '[reload|packs|log|log clear]',
       })
     } catch {
       // The filter works without its command.
@@ -519,7 +538,7 @@ export function register(on: On, options: PluginOptions) {
     const result = await next(call)
     const seen = newTally()
     const filtered = filterResult(f, result, seen)
-    counted($, seen)
+    counted($, seen, toolSource(e.tool, input))
     if (e.tool === 'Read' && typeof e.file_path === 'string' && hidesContent(f, seen)) {
       filteredFiles.add(pathKey(e.file_path))
     }
@@ -539,7 +558,7 @@ export function register(on: On, options: PluginOptions) {
     const context = e.context?.map(c => f.text(c, tally).value).filter(c => c.length > 0)
     if (tally.replaced === 0 && tally.dropped === 0) return next(e)
 
-    counted($, tally)
+    counted($, tally, 'Your prompt')
     const note = f.informModel ? noteFor(tally, f.restorable) : undefined
     return next({ ...e, text: text.value, context: note === undefined ? context : [...(context ?? []), note] })
   }).catch(($, e, next) =>
@@ -551,20 +570,33 @@ export function register(on: On, options: PluginOptions) {
     if (f === null) return next(e)
 
     const r = await next(f.informModel ? { ...e, blocks: [...e.blocks, { name: 'topicFilter', text: EXPLAINER }] } : e)
-    const tally = newTally()
-    const blocks = r.blocks.map(b => ({ ...b, text: f.text(b.text, tally).value }))
-    const instructionFiles = r.instructionFiles?.map(file => ({ ...file, content: f.text(file.content, tally).value }))
-    counted($, tally)
+    // The claudeMd block is the instruction files' text: with the files at
+    // hand, it is counted and logged by file, not a second time as a block.
+    const byFile = r.instructionFiles !== undefined
+    const blocks = r.blocks.map(b => {
+      const tally = newTally()
+      const text = f.text(b.text, tally).value
+      if (!(byFile && b.name === 'claudeMd')) counted($, tally, `Context block ${b.name}`, 'standing')
+      return { ...b, text }
+    })
+    const instructionFiles = r.instructionFiles?.map(file => {
+      const tally = newTally()
+      const content = f.text(file.content, tally).value
+      counted($, tally, file.path, 'standing')
+      return { ...file, content }
+    })
     return instructionFiles === undefined ? { blocks } : { blocks, instructionFiles }
   }).catch(() => ({ blocks: [] }))
 
   on('prompt.section', async ($, e, next) => {
     const r = await next(e)
     const f = (await current($)).filter
-    if (f === null || r.text === null) return r
+    if (f === null) return r
     const tally = newTally()
-    const text = f.text(r.text, tally)
-    counted($, tally)
+    // A section left out now clears its entry: an empty tally does that.
+    const text = r.text === null ? null : f.text(r.text, tally)
+    counted($, tally, `System prompt section ${e.name}`, 'standing')
+    if (text === null) return r
     return text.changed ? { text: text.value } : r
   }).catch(() => ({ text: null }))
 
@@ -574,7 +606,9 @@ export function register(on: On, options: PluginOptions) {
     if (f === null || r.text === null) return r
     const tally = newTally()
     const text = f.text(r.text, tally)
-    counted($, tally)
+    // An attachment has no name of its own; its text tells one from another,
+    // so one asked again (after a reload) replaces its entry.
+    counted($, tally, `Attachment (${e.type})`, 'replace', `attachment:${e.type}:${fnv1a(r.text)}`)
     if (!text.changed) return r
     return { text: text.vanished ? null : text.value }
   }).catch(() => ({ text: null }))
@@ -585,7 +619,7 @@ export function register(on: On, options: PluginOptions) {
     if (f === null) return r
     const tally = newTally()
     const text = f.text(r.text, tally)
-    counted($, tally)
+    counted($, tally, `Skill ${e.skill}`)
     return text.changed ? { text: text.value } : r
   }).catch(() => ({ text: 'topic-filter failed while checking this skill, so its text is withheld.' }))
 
@@ -602,7 +636,7 @@ export function register(on: On, options: PluginOptions) {
     if (f === null) return next(e)
     const tally = newTally()
     const text = f.text(e.text, tally, false)
-    counted($, tally)
+    counted($, tally, 'Message delivered to the session')
     return next(text.changed ? { ...e, text: text.value } : e)
   }).catch(($, e, next) =>
     next.called ? undefined : { consumed: 'topic-filter failed while checking this delivery.' },
@@ -622,8 +656,16 @@ export function register(on: On, options: PluginOptions) {
       }
       // Shown to the person only: `ui.log` lines never reach the model, and
       // these name packs and lists, which would say what is being hidden.
+      if (arg === 'log clear') hiddenLog.clear()
       const l = await current($)
-      const lines = arg === 'packs' ? await packListing($, l) : describe(l)
+      const lines =
+        arg === 'packs'
+          ? await packListing($, l)
+          : arg === 'log'
+            ? hiddenLog.lines()
+            : arg === 'log clear'
+              ? ['The log is cleared, except what Claude reads with every request. The status line count keeps its total.']
+              : describe(l)
       for (const line of [...lines, '(Shown to you only; Claude does not see this.)']) $.ui.log(line)
       return {}
     }
@@ -634,7 +676,7 @@ export function register(on: On, options: PluginOptions) {
     const tally = newTally()
     const text = f.text(r.text, tally)
     if (!text.changed) return r
-    counted($, tally)
+    counted($, tally, `/${e.command} output`)
     const { ref: _ref, ...rest } = r
     return { ...rest, text: text.value }
   }).catch(() => ({ text: 'topic-filter failed while checking this output, so it is withheld.' }))

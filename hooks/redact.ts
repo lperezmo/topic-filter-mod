@@ -21,9 +21,14 @@ export type Tally = {
   dropped: number
   /** The placeholders written, so the note can name them. */
   names: Set<string>
+  /** Each term hidden, by folded term: for the person's log only, never the model. */
+  hits: Map<string, Hit>
 }
 
-export const newTally = (): Tally => ({ replaced: 0, dropped: 0, names: new Set() })
+/** One term's share of a pass: how often it became its placeholder, and how many lines it dropped. */
+export type Hit = { term: string; placeholder: string; list: string; replaced: number; dropped: number }
+
+export const newTally = (): Tally => ({ replaced: 0, dropped: 0, names: new Set(), hits: new Map() })
 
 /** A filtered value: `vanished` when a dropped line took the whole of it. */
 type Filtered<T> = { value: T; changed: boolean; vanished: boolean }
@@ -70,6 +75,8 @@ export class Filter {
   /** Placeholders a tool call may use; the real term is put back. */
   readonly restorable = new Set<string>()
   readonly informModel: boolean
+  /** Each list's name, by index, for the person's log. */
+  private readonly listNames: readonly string[]
   /** How many terms were too short to use. */
   readonly skippedTerms: number
 
@@ -87,6 +94,7 @@ export class Filter {
     packTerms: ReadonlyMap<number, readonly string[]> = new Map(),
   ) {
     this.informModel = config.informModel
+    this.listNames = config.lists.map(list => list.name)
 
     const refs: TermRef[] = []
     let skipped = 0
@@ -153,7 +161,11 @@ export class Filter {
     if (allowDrop && matches.some(m => m.ref.mode === 'drop-line')) {
       // A literal `\n` ends a line too: some output prints its newlines as text.
       const lines = text.split(/(?<=\n|\\n)/)
-      const kept = lines.filter(line => !this.matcher.find(line).some(m => m.ref.mode === 'drop-line'))
+      const kept = lines.filter(line => {
+        const dropper = this.matcher.find(line).find(m => m.ref.mode === 'drop-line')
+        if (dropper !== undefined) this.hit(tally, dropper.ref).dropped += 1
+        return dropper === undefined
+      })
       tally.dropped += lines.length - kept.length
       if (kept.length === 0) return { value: '', changed: true, vanished: true }
       out = kept.join('')
@@ -173,10 +185,21 @@ export class Filter {
       parts.push(text.slice(at, m.start), name, m.suffix)
       tally.replaced += 1
       tally.names.add(name)
+      this.hit(tally, m.ref).replaced += 1
       at = m.end
     }
     parts.push(text.slice(at))
     return parts.join('')
+  }
+
+  /** The tally's entry for a term, made on first use. A line is dropped by the first drop-line term on it. */
+  private hit(tally: Tally, ref: TermRef): Hit {
+    let hit = tally.hits.get(ref.folded)
+    if (hit === undefined) {
+      hit = { term: ref.canonical, placeholder: this.placeholderOf.get(ref.folded)!, list: this.listNames[ref.list]!, replaced: 0, dropped: 0 }
+      tally.hits.set(ref.folded, hit)
+    }
+    return hit
   }
 
   /** Filters any value: strings anywhere inside it, JSON printed as text included. */

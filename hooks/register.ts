@@ -20,7 +20,7 @@
 import type { EngineInterface, FsEntry, On, PluginOptions, ToolCallResult } from 'claude-code'
 
 import { closestName, ConfigError, optionLists, parseConfig, parsePack, SLUG, type Config, type Pack } from './config.ts'
-import { HiddenLog, label } from './log.ts'
+import { HiddenLog, type LogMode } from './log.ts'
 import { fnv1a } from './placeholders.ts'
 import { Filter, forEachString, newTally, noteFor, type Tally } from './redact.ts'
 
@@ -98,7 +98,7 @@ const SOURCE_KEYS = ['file_path', 'notebook_path', 'command', 'url', 'pattern', 
 function toolSource(tool: string, input: Record<string, unknown>): string {
   for (const key of SOURCE_KEYS) {
     const value = input[key]
-    if (typeof value === 'string' && value.trim() !== '') return label(`${tool} ${value}`)
+    if (typeof value === 'string' && value.trim() !== '') return `${tool} ${value}`
   }
   return tool
 }
@@ -427,13 +427,9 @@ function showStatus($: EngineInterface): void {
   $.ui.status(statusText().replace(/^topic-filter: /, ''))
 }
 
-/**
- * Counts a pass for the status line and logs it under `source`. `replace`
- * marks a source whose whole text the pass covered and the engine may filter
- * again (see HiddenLog.record).
- */
-function counted($: EngineInterface, tally: Tally, source: string, replace = false): void {
-  hiddenLog.record(source, tally, replace)
+/** Counts a pass for the status line and logs it under `source` (see HiddenLog.record for `mode` and `key`). */
+function counted($: EngineInterface, tally: Tally, source: string, mode: LogMode = 'add', key?: string): void {
+  hiddenLog.record(source, tally, mode, key)
   const n = tally.replaced + tally.dropped
   if (n === 0) return
   hiddenCount += n
@@ -574,16 +570,19 @@ export function register(on: On, options: PluginOptions) {
     if (f === null) return next(e)
 
     const r = await next(f.informModel ? { ...e, blocks: [...e.blocks, { name: 'topicFilter', text: EXPLAINER }] } : e)
+    // The claudeMd block is the instruction files' text: with the files at
+    // hand, it is counted and logged by file, not a second time as a block.
+    const byFile = r.instructionFiles !== undefined
     const blocks = r.blocks.map(b => {
       const tally = newTally()
       const text = f.text(b.text, tally).value
-      counted($, tally, `Context block ${b.name}`, true)
+      if (!(byFile && b.name === 'claudeMd')) counted($, tally, `Context block ${b.name}`, 'standing')
       return { ...b, text }
     })
     const instructionFiles = r.instructionFiles?.map(file => {
       const tally = newTally()
       const content = f.text(file.content, tally).value
-      counted($, tally, label(file.path), true)
+      counted($, tally, file.path, 'standing')
       return { ...file, content }
     })
     return instructionFiles === undefined ? { blocks } : { blocks, instructionFiles }
@@ -592,10 +591,12 @@ export function register(on: On, options: PluginOptions) {
   on('prompt.section', async ($, e, next) => {
     const r = await next(e)
     const f = (await current($)).filter
-    if (f === null || r.text === null) return r
+    if (f === null) return r
     const tally = newTally()
-    const text = f.text(r.text, tally)
-    counted($, tally, `System prompt section ${e.name}`, true)
+    // A section left out now clears its entry: an empty tally does that.
+    const text = r.text === null ? null : f.text(r.text, tally)
+    counted($, tally, `System prompt section ${e.name}`, 'standing')
+    if (text === null) return r
     return text.changed ? { text: text.value } : r
   }).catch(() => ({ text: null }))
 
@@ -605,7 +606,9 @@ export function register(on: On, options: PluginOptions) {
     if (f === null || r.text === null) return r
     const tally = newTally()
     const text = f.text(r.text, tally)
-    counted($, tally, `Attachment (${e.type})`)
+    // An attachment has no name of its own; its text tells one from another,
+    // so one asked again (after a reload) replaces its entry.
+    counted($, tally, `Attachment (${e.type})`, 'replace', `attachment:${e.type}:${fnv1a(r.text)}`)
     if (!text.changed) return r
     return { text: text.vanished ? null : text.value }
   }).catch(() => ({ text: null }))
@@ -661,7 +664,7 @@ export function register(on: On, options: PluginOptions) {
           : arg === 'log'
             ? hiddenLog.lines()
             : arg === 'log clear'
-              ? ['The log is cleared. The status line count keeps its total.']
+              ? ['The log is cleared, except what Claude reads with every request. The status line count keeps its total.']
               : describe(l)
       for (const line of [...lines, '(Shown to you only; Claude does not see this.)']) $.ui.log(line)
       return {}

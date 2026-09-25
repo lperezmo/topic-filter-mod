@@ -75,11 +75,33 @@ describe('the log', () => {
 
   test('a source filtered again whole replaces its entry, and goes when nothing is hidden', () => {
     const log = new HiddenLog()
-    log.record('System prompt section memory', pass('Teotihuacan'), true)
-    log.record('System prompt section memory', pass('Teotihuacan'), true)
+    log.record('System prompt section memory', pass('Teotihuacan'), 'standing')
+    log.record('System prompt section memory', pass('Teotihuacan'), 'standing')
     expect(log.lines().join('\n')).toMatch(/\(x1\)/)
-    log.record('System prompt section memory', pass('nothing here'), true)
+    log.record('System prompt section memory', pass('nothing here'), 'standing')
     expect(log.lines()).toEqual(['Nothing has been hidden this session yet.'])
+  })
+
+  test('what stands in every request is listed apart, outlives the cap, and survives clear', () => {
+    const log = new HiddenLog()
+    log.record('System prompt section memory', pass('Teotihuacan'), 'standing')
+    for (let i = 0; i < 205; i++) log.record(`Read ${i}.md`, pass('Teotihuacan'))
+    expect(log.lines().slice(0, 2)).toEqual([
+      'Hidden in what Claude reads with every request (system prompt, CLAUDE.md):',
+      '  System prompt section memory',
+    ])
+    log.clear()
+    const after = log.lines()
+    expect(after.includes('  System prompt section memory')).toBe(true)
+    expect(after.includes('Hidden as it came in (most recent last):')).toBe(false)
+  })
+
+  test('sources whose cut labels match stay apart by key', () => {
+    const log = new HiddenLog()
+    const long = `C:/${'deep/'.repeat(30)}`
+    log.record(`${long}a/CLAUDE.md`, pass('Teotihuacan'), 'standing')
+    log.record(`${long}b/CLAUDE.md`, pass('nothing here'), 'standing')
+    expect(log.lines().join('\n')).toMatch(/Teotihuacan ->/)
   })
 
   test('a pass that hid nothing adds no entry', () => {
@@ -92,7 +114,7 @@ describe('the log', () => {
     const log = new HiddenLog()
     for (let i = 0; i < 205; i++) log.record(`Read ${i}.md`, pass('Teotihuacan'))
     const lines = log.lines()
-    expect(lines[1]).toBe('  (5 older sources not shown)')
+    expect(lines.slice(0, 2)).toEqual(['Hidden as it came in (most recent last):', '  (5 older sources not shown)'])
     expect(lines.includes('  Read 4.md')).toBe(false)
     expect(lines.includes('  Read 5.md')).toBe(true)
     log.clear()

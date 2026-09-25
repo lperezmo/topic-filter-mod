@@ -344,6 +344,25 @@ describe('/topic-filter log', () => {
     expect(shown.logs.at(-1)).toBe('(Shown to you only; Claude does not see this.)')
   })
 
+  test('CLAUDE.md counts once, by file, and an attachment asked again counts once', async ($, on) => {
+    const shown = world(on)
+    on('prompt.context', async ($, e) => ({ blocks: e.blocks, instructionFiles: e.instructionFiles }))
+    on('prompt.attachment', async () => ({ text: 'Contents of notes.md: Teotihuacan' }))
+    await $.prompt.context({
+      blocks: [{ name: 'claudeMd', text: 'Our site: Teotihuacan.' }],
+      instructionFiles: [{ path: 'C:/work/CLAUDE.md', kind: 'project', content: 'Our site: Teotihuacan.' }],
+    })
+    await $.prompt.attachment({ type: 'file', text: 'x', origin: { kind: 'engine' } as never })
+    await $.prompt.attachment({ type: 'file', text: 'x', origin: { kind: 'engine' } as never })
+
+    await $.command.run({ command: 'topic-filter', args: 'log' } as never)
+    const text = shown.logs.join('\n')
+    expect(text).toMatch(/ {2}C:\/work\/CLAUDE\.md\n {6}Teotihuacan -> \S+ \(x1\)/)
+    expect(text.includes('Context block claudeMd')).toBe(false)
+    expect(text).toMatch(/ {2}Attachment \(file\)\n {6}Teotihuacan -> \S+ \(x1\)/)
+    expect(shown.statuses.at(-1)).toMatch(/, 3 hidden/)
+  })
+
   test('log clear empties it', async ($, on) => {
     const shown = world(on)
     tools(on)

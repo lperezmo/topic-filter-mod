@@ -106,19 +106,31 @@ real terms, the placeholder each became, and how many lines each drop-line
 term removed. The dropped lines themselves are not shown.
 
 ```
-Bash gh repo list
-    2 lines dropped by "repos tagged claude-hidden": secret-repo (x1), old-thesis (x1)
-Read D:
-otes	rip.md
-    Teotihuacan -> Marzipan (x3)
+Hidden in what Claude reads with every request (system prompt, CLAUDE.md):
+  C:/work/CLAUDE.md
+      Teotihuacan -> Marzipan (x1)
+Hidden as it came in (most recent last):
+  Bash gh repo list
+      2 lines dropped by "repos tagged claude-hidden": secret-repo (x1), old-thesis (x1)
+  Read C:/notes/trip.md
+      Teotihuacan -> Marzipan (x3)
 ```
 
-The log is kept in memory only, never written to disk (a file would be a
-second copy of what you are hiding), and ends with the session;
-`/topic-filter log clear` empties it sooner. Every `/topic-filter` output is
-shown to you only: it names packs, lists and terms, which would tell Claude
-what is being hidden. The status line's `M hidden` counts each hidden word and
-each dropped line, not distinct terms.
+The log is kept in memory only and ends with the session. The mod never
+writes it to a file of its own, since that would be a second copy of what you
+are hiding. `/topic-filter log clear` empties the second part sooner; the
+first stays, as that text is still in every request.
+
+Every `/topic-filter` output is shown to you only: it names packs, lists and
+terms, which would tell Claude what is being hidden. Two caveats for the log,
+which names real terms:
+
+- Claude Code copies every such line into its debug log, so with `--debug` or
+  `--debug-file` the terms end up in that file.
+- Another plugin that hooks `ui.log` sees the lines too.
+
+The status line's `M hidden` counts each hidden word and each dropped line,
+not distinct terms.
 
 ## The topics file
 

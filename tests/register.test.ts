@@ -135,11 +135,34 @@ describe('tool output', () => {
     expect(ran).toEqual([])
   })
 
+  test('lets a file that merely mentions the topics file be written, but not the topics file itself', async ($, on) => {
+    world(on)
+    const ran = tools(on)
+    const docs = await $.tool.call({ tool: 'Write', file_path: 'README.md', content: `Edit ${TOPICS_PATH} yourself.` })
+    expect(docs.deny).toBeUndefined()
+    const own = await $.tool.call({ tool: 'Write', file_path: TOPICS_PATH, content: '{}' })
+    expect(own.deny).toMatch(/list of hidden topics/)
+    const shell = await $.tool.call({ tool: 'Bash', command: `cat ${TOPICS_PATH}` })
+    expect(shell.deny).toMatch(/list of hidden topics/)
+    expect(ran).toEqual(['Write'])
+  })
+
   test('passes everything through when there is no topics file', async ($, on) => {
     world(on, null)
     tools(on)
     const r = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
     expect((r.result as { stdout: string }).stdout).toBe(GH_LIST)
+  })
+
+  test('with no topics file, the default settings still drop repositories tagged claude-hidden', async ($, on) => {
+    const shown = world(on, null)
+    tools(on)
+    on('process.run', async ($, e) => ({ value: { exitCode: 0, stdout: '[{"name":"secret-repo"}]', stderr: '' } }) as never)
+    await $.command.run({ command: 'topic-filter', args: 'reload' } as never)
+    const r = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
+    expect((r.result as { stdout: string }).stdout.includes('secret-repo')).toBe(false)
+    expect(shown.logs.join('\n')).toMatch(/No topics file: everything below comes from the plugin settings/)
+    expect(shown.logs.join('\n')).toMatch(/"repos tagged claude-hidden": drop-line, from settings, GitHub topic claude-hidden \(1 repo\)/)
   })
 
   test('pauses tool calls while the topics file is broken, telling the model nothing specific', async ($, on) => {

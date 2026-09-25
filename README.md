@@ -27,28 +27,36 @@ claude plugin install topic-filter@topic-filter-mod
 Or from inside Claude Code: `/plugin marketplace add lperezmo/topic-filter-mod`,
 then `/plugin install topic-filter@topic-filter-mod`.
 
-If the installer says `1 userConfig option not yet set`, you can ignore it:
-that option (`configPath`) is optional, and empty means the default path below.
+**3. Choose what to hide.** Run `/plugin`, pick `topic-filter`, and open its
+settings. Everything is a switch or a short text field:
 
-**3. Say what to hide** in `~/.claude/topic-filter/topics.json`. A built-in
-[topic pack](#topic-packs), your own words, or both:
+| Setting | Default | What it does |
+| --- | --- | --- |
+| Hide repos tagged on GitHub | on | Your repos with a topic below drop out of everything Claude reads |
+| GitHub topics | `claude-hidden` | Comma-separated topics that mark a repo as hidden |
+| Hide anthropology, biology, chemistry, cybersecurity, genetics | off | One switch per [built-in pack](#topic-packs) |
+| Other packs | empty | Names of [your own packs](#topic-packs), comma-separated |
+| Extra words to hide | empty | Comma-separated words or names; kept in secure storage, not in `settings.json` |
+| Topics file (advanced) | empty | Where [the topics file](#the-topics-file) lives, if you want one |
 
-```json
-{ "lists": [{ "name": "science", "pack": "chemistry", "terms": ["my-secret-project"] }] }
+What you type there goes to the plugin, never into the conversation. A
+change applies right away, no restart needed. To hide a repo:
+
+```
+gh repo edit OWNER/REPO --add-topic claude-hidden
 ```
 
-Create the `topic-filter` folder inside `.claude` in your home folder, and
-write the file with any editor (Notepad is fine). Do it yourself rather than
-asking Claude: the file holds the words you are hiding.
+then `/topic-filter reload` in a running session.
 
-**4. Restart Claude Code.** Sessions that were already running do not load
-the plugin. In a new session the status line shows `on, N terms, M hidden`,
-and `/topic-filter` shows your lists.
+**4. Restart Claude Code** once after installing: sessions that were already
+running do not load the plugin. The status line then shows
+`on, N terms, M hidden`, and `/topic-filter` shows what is hidden and where
+each part comes from (counts only, shown to you only).
 
-Built-in packs: `anthropology`, `biology`, `chemistry`, `cybersecurity`,
-`genetics`. A fuller example with every option is in
-[`examples/topics.example.json`](examples/topics.example.json). To keep the
-topics file elsewhere, set the plugin's `configPath` option in `/config`.
+The [topics file](#the-topics-file) is optional. Use it for what the settings
+cannot express: drop-line or restore modes for your own words, several lists,
+`exclude`. Write it yourself in an editor rather than asking Claude, since it
+holds the words you are hiding. Its lists add to the settings'.
 
 > Built and tested against Claude Code 2.1.282. The function hooks API may
 > change between releases.
@@ -214,8 +222,10 @@ Going the other way:
 - **No blind overwrites.** Once the model has read a file with something
   hidden, a whole-file `Write` to it is refused: its copy lacks what it never
   saw. `Edit` still works, and fails safely if its text spans something hidden.
-- **The topics file is off limits.** Tool calls naming it are refused, and
-  anything read from it would be filtered anyway.
+- **The topics file is off limits.** It names your lists and packs, which
+  say what is hidden even where the words themselves are filtered. Reading,
+  editing or writing it is refused, as is any shell command that names it.
+  Writing another file that merely mentions its path (docs, a script) is fine.
 - **Fails closed.** If filtering throws or runs out of time, what it was
   filtering is withheld, never passed through. A broken topics file keeps the
   last good list, or refuses tool calls until it is fixed, and the status line
@@ -240,6 +250,10 @@ Read these before relying on it.
   from a filtered read loses the hidden lines. Only `Write` is refused.
 - **Sessions from before the mod was on** already hold the raw terms.
 - **Other plugins** that hook `tool.call` beneath this one see raw results.
+- **Your settings are readable.** The pack switches and GitHub topics you set
+  in `/plugin` are stored in `~/.claude/settings.json`, which Claude can read,
+  so they show which topics you hide (the extra words are in secure storage).
+  Only the topics file is guarded.
 
 ## Development
 

@@ -19,7 +19,7 @@
 
 import type { EngineInterface, FsEntry, On, PluginOptions, ToolCallResult } from 'claude-code'
 
-import { closestName, ConfigError, parseConfig, parsePack, SLUG, type Config, type Pack } from './config.ts'
+import { closestName, ConfigError, optionLists, parseConfig, parsePack, SLUG, type Config, type Pack } from './config.ts'
 import { fnv1a } from './placeholders.ts'
 import { Filter, forEachString, newTally, noteFor, type Tally } from './redact.ts'
 
@@ -89,6 +89,9 @@ let hiddenCount = 0
 
 /** The `configPath` option; empty means the default under the home directory. */
 let configured = ''
+
+/** The plugin's settings: what to hide besides the topics file (packs, tagged repos, extra words). */
+let pluginOptions: PluginOptions = {}
 
 /** Files the model has read with something hidden, by pathKey. */
 const filteredFiles = new Set<string>()
@@ -164,7 +167,8 @@ async function loadPacks(
         text = await $.fs.read(builtIn)
       } catch {
         const names = [...new Set((await findPacks($, home)).map(entry => entry.name))]
-        throw new ConfigError(missingPack(list.pack, i, names))
+        const where = list.setting === undefined ? `lists[${i}]` : `the ${list.setting} setting`
+        throw new ConfigError(missingPack(list.pack, where, names))
       }
     }
     const pack = parsePack(text, list.pack)
@@ -176,10 +180,10 @@ async function loadPacks(
 }
 
 /** What to tell the person about a pack that does not exist; its first sentence fits a status line. */
-function missingPack(name: string, list: number, available: readonly string[]): string {
+function missingPack(name: string, where: string, available: readonly string[]): string {
   const guess = closestName(name, available)
   return [
-    `Pack "${name}" (lists[${list}]) was not found.`,
+    `Pack "${name}" (${where}) was not found.`,
     guess === undefined ? '' : `Did you mean "${guess}"?`,
     available.length === 0 ? 'No packs are installed.' : `Available: ${available.join(', ')}.`,
     `Run /topic-filter packs to see what each covers, or make your own at ~/${USER_PACKS}/${name}.json.`,
@@ -318,14 +322,19 @@ async function current($: EngineInterface): Promise<Loaded> {
 }
 
 async function build($: EngineInterface, path: string, topicsKey: string, previous: Loaded | undefined): Promise<Loaded> {
-  if (topicsKey.endsWith('|missing')) {
-    return { key: [topicsKey, githubKey].join('\n'), path, deps: [], packsUsed: new Map(), config: null, latest: null, filter: null }
-  }
+  const isMissing = topicsKey.endsWith('|missing')
 
   let deps: string[] = previous?.deps ?? []
   let latest: Config | null = previous?.latest ?? null
   try {
-    const config = parseConfig(await $.fs.read(path))
+    // The settings' lists come after the file's, so `lists[i]` in a message
+    // still points into the file.
+    const own = isMissing ? null : parseConfig(await $.fs.read(path))
+    const extra = optionLists(pluginOptions)
+    if (own === null && extra.length === 0) {
+      return { key: [topicsKey, githubKey].join('\n'), path, deps: [], packsUsed: new Map(), config: null, latest: null, filter: null }
+    }
+    const config: Config = { placeholder: 'codename', informModel: true, ...own, lists: [...(own?.lists ?? []), ...extra] }
     latest = config
     // Both places of every named pack, found or not: creating or editing
     // either one is then noticed.
@@ -388,7 +397,9 @@ const firstSentence = (text: string) => /^.*?[.?!](?=\s|$)/.exec(text)?.[0] ?? t
 
 /** The status line: UI only, never sent to the model, so it may name packs and problems. */
 function statusText(): string {
-  if (loaded === undefined || (loaded.filter === null && loaded.error === undefined)) return 'topic-filter: off (no topics file)'
+  if (loaded === undefined || (loaded.filter === null && loaded.error === undefined)) {
+    return 'topic-filter: off, nothing chosen to hide. Choose packs and words in /plugin.'
+  }
   if (loaded.filter === null) return `topic-filter: BLOCKING tool calls. ${firstSentence(loaded.error ?? '')} Run /topic-filter.`
   const base = `topic-filter: on, ${count(loaded.filter.termCount, 'term')}, ${hiddenCount} hidden`
   if (loaded.error !== undefined) return `${base}. Using the last good settings: ${firstSentence(loaded.error)} Run /topic-filter.`
@@ -410,11 +421,14 @@ function counted($: EngineInterface, tally: Tally): void {
 /** The overview `/topic-filter` shows the person: every list and where its terms come from. */
 function describe(l: Loaded): string[] {
   const lines = [statusText().replace(/^topic-filter: /, 'topic-filter is '), `Topics file: ${l.path}`]
+  if (l.latest !== null && l.latest.lists.every(list => list.setting !== undefined)) {
+    lines.push('(No topics file: everything below comes from the plugin settings in /plugin.)')
+  }
   if (l.error !== undefined) lines.push(`Problem: ${l.error}`)
   if (l.latest !== null) {
     lines.push('Lists:')
     l.latest.lists.forEach((list, i) => {
-      const parts: string[] = [list.mode]
+      const parts: string[] = [list.setting === undefined ? list.mode : `${list.mode}, from settings`]
       const pack = l.packsUsed.get(i)
       if (pack !== undefined) parts.push(`pack ${pack.name} (${pack.where}, ${count(pack.terms, 'term')})`)
       else if (list.pack !== undefined) parts.push(`pack ${list.pack} (NOT FOUND)`)
@@ -433,6 +447,7 @@ function describe(l: Loaded): string[] {
 
 export function register(on: On, options: PluginOptions) {
   configured = typeof options.configPath === 'string' ? options.configPath.trim() : ''
+  pluginOptions = options
 
   on('session.start', async ($, e, next) => {
     try {
@@ -665,12 +680,20 @@ function filterResult(f: Filter, r: ToolCallResult, seen: Tally): ToolCallResult
 }
 
 /** Whether a tool call names the topics file (best effort: a name match, not a sandbox). */
+/**
+ * Fields that are text being written into some file, not a file to act on: a
+ * README or script that merely mentions the topics file's path is fine. The
+ * target (`file_path`), commands, patterns and paths are still checked.
+ */
+const WRITTEN_TEXT = new Set(['content', 'old_string', 'new_string', 'new_source'])
+
 function mentionsPath(input: Record<string, unknown>, path: string): boolean {
   const norm = (s: string) => s.replace(/\\/g, '/').toLowerCase()
   const full = norm(path)
   const tail = full.split('/').slice(-2).join('/')
   let found = false
-  forEachString(input, s => {
+  const checked = Object.fromEntries(Object.entries(input).filter(([key]) => !WRITTEN_TEXT.has(key)))
+  forEachString(checked, s => {
     const n = norm(s)
     if (n.includes(full) || n.includes(tail)) found = true
   })

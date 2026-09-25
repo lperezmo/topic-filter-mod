@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { closestName, parseConfig, parsePack, type Config } from '../hooks/config.ts'
+import { closestName, optionLists, parseConfig, parsePack, type Config } from '../hooks/config.ts'
 import { foldTerm, Matcher, type TermRef } from '../hooks/matcher.ts'
 import { assignPlaceholders, findPlaceholders } from '../hooks/placeholders.ts'
 import { Filter, newTally, noteFor } from '../hooks/redact.ts'
@@ -124,6 +124,35 @@ describe('config and packs', () => {
     const tally = newTally()
     f.text('Mayapan and Gizamatic, then Giza', tally)
     expect(tally.replaced).toBe(2)
+  })
+
+  test('the plugin settings add lists: tagged repos by default, switched-on packs, extra words', () => {
+    expect(optionLists({}).map(l => [l.name, l.mode, l.githubTopic])).toEqual([['repos tagged claude-hidden', 'drop-line', 'claude-hidden']])
+    const lists = optionLists({
+      hideTagged: true,
+      githubTopics: 'claude-hidden, Private-Lab',
+      hideChemistry: true,
+      hideBiology: false,
+      otherPacks: 'my-topic, chemistry',
+      extraWords: ' Teotihuacan ,, Giza ',
+    })
+    expect(lists.map(l => l.name)).toEqual([
+      'repos tagged claude-hidden',
+      'repos tagged private-lab',
+      'pack chemistry',
+      'pack my-topic',
+      'extra words',
+    ])
+    expect(lists.at(-1)!.terms).toEqual(['Teotihuacan', 'Giza'])
+    expect(lists.find(l => l.pack === 'my-topic')!.setting).toBe('Other packs')
+  })
+
+  test('tagged repos can be switched off, and nothing chosen adds nothing', () => {
+    expect(optionLists({ hideTagged: false })).toEqual([])
+  })
+
+  test('a bad name in a setting names the setting and position, never the value', () => {
+    expect(() => optionLists({ otherPacks: 'ok, ../secrets' })).toThrow("The Other packs setting's item 2 is not a pack name")
   })
 
   test('a pack without hints is fine', () => {

@@ -19,6 +19,8 @@ export type ListConfig = {
   pack?: string
   /** Terms left out of this list, whatever brought them in (the pack, the GitHub topic, `terms`). */
   exclude: string[]
+  /** The plugin option this list came from; absent for the topics file's own lists. */
+  setting?: string
 }
 
 export type Config = {
@@ -93,6 +95,66 @@ function parseList(list: unknown, i: number): ListConfig {
 
 /** A GitHub topic or pack name: also safe as a file name, never a path. */
 export const SLUG = /^[a-z0-9][a-z0-9-]*$/
+
+/** The built-in packs' switches in the plugin's settings, by option key. */
+export const PACK_OPTIONS: Readonly<Record<string, string>> = {
+  hideAnthropology: 'anthropology',
+  hideBiology: 'biology',
+  hideChemistry: 'chemistry',
+  hideCybersecurity: 'cybersecurity',
+  hideGenetics: 'genetics',
+}
+
+/** A comma-separated option (or a list option) as its items. */
+function items(value: unknown): string[] {
+  const parts = typeof value === 'string' ? value.split(',') : Array.isArray(value) ? value : []
+  return parts.filter((s): s is string => typeof s === 'string').map(s => s.trim()).filter(s => s !== '')
+}
+
+function slugs(value: unknown, setting: string, what: string): string[] {
+  const names = items(value).map(s => s.toLowerCase())
+  const bad = names.findIndex(name => !SLUG.test(name))
+  if (bad >= 0) throw new ConfigError(`The ${setting} setting's item ${bad + 1} is not a ${what} (lowercase letters, digits, hyphens).`)
+  return [...new Set(names)]
+}
+
+/**
+ * The lists the plugin's own settings (`/plugin configure`, `/config`) add to
+ * the topics file's: repositories by GitHub topic, dropped by line; switched-on
+ * packs; and extra words. The topics file is then only needed for more than
+ * this.
+ */
+export function optionLists(options: Readonly<Record<string, unknown>>): ListConfig[] {
+  const list = (over: Partial<ListConfig> & { name: string; setting: string }): ListConfig => ({
+    mode: 'replace',
+    match: 'word',
+    restore: false,
+    terms: [],
+    exclude: [],
+    ...over,
+  })
+  const lists: ListConfig[] = []
+
+  if (options.hideTagged !== false) {
+    for (const topic of slugs(options.githubTopics ?? 'claude-hidden', 'GitHub topics', 'GitHub topic')) {
+      lists.push(list({ name: `repos tagged ${topic}`, setting: 'GitHub topics', mode: 'drop-line', githubTopic: topic }))
+    }
+  }
+
+  const packs = new Map<string, string>()
+  for (const [key, pack] of Object.entries(PACK_OPTIONS)) {
+    if (options[key] === true) packs.set(pack, `Hide ${pack}`)
+  }
+  for (const pack of slugs(options.otherPacks, 'Other packs', 'pack name')) {
+    if (!packs.has(pack)) packs.set(pack, 'Other packs')
+  }
+  for (const [pack, setting] of packs) lists.push(list({ name: `pack ${pack}`, setting, pack }))
+
+  const words = items(options.extraWords)
+  if (words.length > 0) lists.push(list({ name: 'extra words', setting: 'Extra words to hide', terms: words }))
+
+  return lists
+}
 
 function strings(value: unknown, where: string): string[] {
   if (value === undefined) return []

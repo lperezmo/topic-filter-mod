@@ -1,6 +1,6 @@
 {
   "name": "topic-filter",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Hide chosen topics from Claude: listed terms become stable placeholder names (or their lines are dropped) in tool output, prompts, CLAUDE.md, memory and skills before the model reads them.",
   "author": {
     "name": "Luis Perez Morales",
@@ -20,7 +20,7 @@
     "hideTagged": {
       "type": "boolean",
       "title": "Hide repos tagged on GitHub",
-      "description": "Your repositories with one of the GitHub topics below drop out of everything Claude reads. Tag one with: gh repo edit OWNER/REPO --add-topic claude-hidden, then run /topic-filter reload.",
+      "description": "Your repositories with one of the GitHub topics below drop out of everything Claude reads. Tag one with: gh repo edit OWNER/REPO --add-topic claude-hidden, then run /topic-filter reload. Easiest in /config (Enter flips it); on the /plugin screen, type true or false.",
       "default": true
     },
     "githubTopics": {
@@ -32,31 +32,31 @@
     "hideAnthropology": {
       "type": "boolean",
       "title": "Hide anthropology",
-      "description": "The built-in anthropology pack: ancient Mesoamerican, Andean and Egyptian sites, civilizations, rulers and deities, and anthropology vocabulary.",
+      "description": "The built-in anthropology pack: ancient Mesoamerican, Andean and Egyptian sites, civilizations, rulers and deities, and anthropology vocabulary. Easiest in /config (Enter flips it); on the /plugin screen, type true or false.",
       "default": false
     },
     "hideBiology": {
       "type": "boolean",
       "title": "Hide biology",
-      "description": "The built-in biology pack: molecular biology techniques, cellular processes and anatomical terms.",
+      "description": "The built-in biology pack: molecular biology techniques, cellular processes and anatomical terms. Easiest in /config (Enter flips it); on the /plugin screen, type true or false.",
       "default": false
     },
     "hideChemistry": {
       "type": "boolean",
       "title": "Hide chemistry",
-      "description": "The built-in chemistry pack: chemical elements, named reactions, functional groups and laboratory equipment.",
+      "description": "The built-in chemistry pack: chemical elements, named reactions, functional groups and laboratory equipment. Easiest in /config (Enter flips it); on the /plugin screen, type true or false.",
       "default": false
     },
     "hideCybersecurity": {
       "type": "boolean",
       "title": "Hide cybersecurity",
-      "description": "The built-in cybersecurity pack: named malware, worms and hacker groups, and security vocabulary.",
+      "description": "The built-in cybersecurity pack: named malware, worms and hacker groups, and security vocabulary. Easiest in /config (Enter flips it); on the /plugin screen, type true or false.",
       "default": false
     },
     "hideGenetics": {
       "type": "boolean",
       "title": "Hide genetics",
-      "description": "The built-in genetics pack: genetic disorders and syndromes, and genetics vocabulary.",
+      "description": "The built-in genetics pack: genetic disorders and syndromes, and genetics vocabulary. Easiest in /config (Enter flips it); on the /plugin screen, type true or false.",
       "default": false
     },
     "otherPacks": {
@@ -68,7 +68,7 @@
     "extraWords": {
       "type": "string",
       "title": "Extra words to hide",
-      "description": "Comma-separated words or names to hide. Kept in secure storage, not in settings.json.",
+      "description": "Comma-separated words or names to hide. Kept in secure storage, not in settings.json, so it is set here in /plugin and not listed in /config.",
       "sensitive": true,
       "default": ""
     },

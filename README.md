@@ -27,8 +27,8 @@ claude plugin install topic-filter@topic-filter-mod
 Or from inside Claude Code: `/plugin marketplace add lperezmo/topic-filter-mod`,
 then `/plugin install topic-filter@topic-filter-mod`.
 
-**3. Choose what to hide.** Run `/plugin`, pick `topic-filter`, and open its
-settings. Everything is a switch or a short text field:
+**3. Choose what to hide.** Run `/config` and type `topic-filter` to find the
+plugin's rows. Enter or Space flips a switch or edits a field:
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -39,8 +39,13 @@ settings. Everything is a switch or a short text field:
 | Extra words to hide | empty | Comma-separated words or names; kept in secure storage, not in `settings.json` |
 | Topics file (advanced) | empty | Where [the topics file](#the-topics-file) lives, if you want one |
 
-What you type there goes to the plugin, never into the conversation. A
-change applies right away, no restart needed. To hide a repo:
+**Extra words to hide** is kept secret, so `/config` does not list it: set it
+in `/plugin`: Installed, then `topic-filter`, then configure it. That screen
+shows every setting as a text box; there, a switch takes the word `true` or
+`false` (a `y` is saved as false).
+
+What you type in either place goes to the plugin, never into the
+conversation. A change applies right away, no restart needed. To hide a repo:
 
 ```
 gh repo edit OWNER/REPO --add-topic claude-hidden

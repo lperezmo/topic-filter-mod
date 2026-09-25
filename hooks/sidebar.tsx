@@ -7,7 +7,7 @@
 
 import type { BoxProps, ElementConstructor, RenderElement, TextProps } from 'claude-code'
 
-import type { Summary } from './log.ts'
+import { plural, type Summary } from './log.ts'
 import type { Hit } from './redact.ts'
 
 /** The pane's id, one per plugin. */
@@ -26,8 +26,6 @@ export type SidebarInput = {
   /** Counts by list only, never a word, a placeholder or a source. */
   countsOnly: boolean
 }
-
-const plural = (n: number, noun: string) => `${n.toLocaleString('en-US')} ${noun}${n === 1 ? '' : 's'}`
 
 /** "3 words, 2 lines": what a list or the session hid, in the person's terms. */
 function counts(x: { replaced: number; dropped: number }): string {

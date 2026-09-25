@@ -15,7 +15,8 @@ const MAX_TERMS_SHOWN = 20
 /** Past this many characters a source's label is cut. */
 const MAX_LABEL = 100
 
-const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
+/** "1 word", "1,204 words": a count as the log and the sidebar show it. */
+export const plural = (n: number, noun: string) => `${n.toLocaleString('en-US')} ${noun}${n === 1 ? '' : 's'}`
 
 /** A source's label on one line, cut to a readable length. */
 export function label(text: string): string {
@@ -50,7 +51,7 @@ export type Summary = {
   lists: ListSummary[]
   /** The label of the most recent source with a hit, if any. */
   latest?: string
-  /** The subagents with hits, in the order they first hid something. */
+  /** The subagents with hits, ordered by their least recently hidden source. */
   agents: string[]
 }
 
@@ -109,7 +110,7 @@ export class HiddenLog {
     }
     if (this.forgotten > 0) lines.push(`(${plural(this.forgotten, 'older source')} not shown)`)
 
-    // The main conversation first, then each subagent in the order it first hid something.
+    // The main conversation first, then each subagent, ordered by its least recently hidden source.
     const byAgent = new Map<string | undefined, Entry[]>()
     for (const entry of this.passing.values()) byAgent.set(entry.agent, [...(byAgent.get(entry.agent) ?? []), entry])
     const main = byAgent.get(undefined)

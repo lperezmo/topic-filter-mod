@@ -110,7 +110,8 @@ async function syncSidebar($: EngineInterface): Promise<void> {
     else if (was === true) await $.ui.close({ id: SIDEBAR_ID })
     if (was !== isOn) await $.store.set('sidebar', isOn)
   } catch {
-    // The filter works without its sidebar.
+    // The filter works without its sidebar; the next call tries again.
+    sidebarSynced = false
   }
 }
 
@@ -124,6 +125,14 @@ async function agentLabels($: EngineInterface): Promise<Map<string, string>> {
   } catch {
     return new Map()
   }
+}
+
+/** Subagent labels the sidebar has looked up, so a redraw lists the agents only for one it has not seen. */
+const sidebarLabels = new Map<string, string>()
+
+async function sidebarLabel($: EngineInterface, agentId: string): Promise<string> {
+  if (!sidebarLabels.has(agentId)) for (const [id, name] of await agentLabels($)) sidebarLabels.set(id, name)
+  return sidebarLabels.get(agentId) ?? agentId
 }
 
 /** The input fields that say what a tool call was about, in order of preference. */
@@ -734,7 +743,7 @@ export function register(on: On, options: PluginOptions) {
     if (e.requestId !== SIDEBAR_ID) return next(e)
     const { Box, Text } = await $.ui.resolve(e)
     const agentId = e.props.view.agentId
-    const agent = agentId === undefined ? undefined : ((await agentLabels($)).get(agentId) ?? agentId)
+    const agent = agentId === undefined ? undefined : await sidebarLabel($, agentId)
     return sidebarView(
       { Box, Text },
       { summary: hiddenLog.summary(agentId), ...(agent === undefined ? {} : { agent }), countsOnly: pluginOptions.sidebarCountsOnly === true },

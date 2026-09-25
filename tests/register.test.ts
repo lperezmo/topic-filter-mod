@@ -466,6 +466,21 @@ describe('sidebar', () => {
     expect(state.closed).toEqual([SIDEBAR_ID])
   })
 
+  test('a close that fails is tried again on the next call', async ($, on) => {
+    world(on, TOPICS, {}, { sidebar: true })
+    let attempts = 0
+    on('ui.close', () => {
+      attempts += 1
+      if (attempts === 1) throw new Error('not ready')
+      return { value: undefined } as never
+    })
+    tools(on)
+    await $.tool.call({ tool: 'Bash', command: 'ls' })
+    await $.tool.call({ tool: 'Bash', command: 'pwd' })
+    await $.tool.call({ tool: 'Bash', command: 'ls' })
+    expect(attempts).toBe(2)
+  })
+
   test('a setting that was never on leaves panes alone', async ($, on) => {
     world(on)
     const state = panes(on)

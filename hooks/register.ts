@@ -92,6 +92,19 @@ let hiddenCount = 0
 /** What was hidden and where, for `/topic-filter log`: memory only, shown to the person only. */
 const hiddenLog = new HiddenLog()
 
+/**
+ * Whether the person paused filtering with `/topic-filter off`. Memory only:
+ * a restart, /clear or a reload turns filtering back on, so a forgotten
+ * pause does not outlive the session.
+ */
+let paused = false
+
+/**
+ * Who may pause: the person at this terminal's prompt. Remote Control is left
+ * out, as the engine cannot attest its sender is the owner. Anyone may resume.
+ */
+const MAY_PAUSE = new Set(['composer'])
+
 /** Whether this module has matched the sidebar to its setting yet: once per load, as a /config change reloads it. */
 let sidebarSynced = false
 
@@ -382,6 +395,22 @@ async function current($: EngineInterface): Promise<Loaded> {
   return loaded
 }
 
+/** The filter to apply now: none while the person has paused it. */
+async function active($: EngineInterface): Promise<Filter | null> {
+  const f = (await current($)).filter
+  return paused ? null : f
+}
+
+/** Drops what was filtered from answers the engine may have kept, after a pause or a resume. */
+function refilter($: EngineInterface): void {
+  $.ui.invalidate('prompt.section')
+  $.ui.invalidate('prompt.context')
+  $.ui.invalidate('prompt.attachment')
+  $.ui.invalidate('tool.describe')
+  $.ui.invalidate('ui.render')
+  showStatus($)
+}
+
 async function build($: EngineInterface, path: string, topicsKey: string, previous: Loaded | undefined): Promise<Loaded> {
   const isMissing = topicsKey.endsWith('|missing')
 
@@ -461,6 +490,7 @@ function statusText(): string {
   if (loaded === undefined || (loaded.filter === null && loaded.error === undefined)) {
     return 'topic-filter: off, nothing chosen to hide. Switch on packs in /config.'
   }
+  if (paused) return 'topic-filter: PAUSED, nothing is hidden. /topic-filter on resumes it.'
   if (loaded.filter === null) return `topic-filter: BLOCKING tool calls. ${firstSentence(loaded.error ?? '')} Run /topic-filter.`
   const base = `topic-filter: on, ${count(loaded.filter.termCount, 'term')}, ${hiddenCount} hidden`
   if (loaded.error !== undefined) return `${base}. Using the last good settings: ${firstSentence(loaded.error)} Run /topic-filter.`
@@ -523,8 +553,8 @@ export function register(on: On, options: PluginOptions) {
       await $.command.register({
         name: COMMAND,
         description:
-          'Show what topic-filter is set to hide; `log` lists what was hidden and where; `sidebar` shows or hides it in a pane; `packs` lists topic packs; `reload` re-reads everything',
-        argumentHint: '[reload|packs|log|log clear|sidebar]',
+          'Show what topic-filter is set to hide; `off` pauses it and `on` resumes it; `log` lists what was hidden and where; `sidebar` shows or hides it in a pane; `packs` lists topic packs; `reload` re-reads everything',
+        argumentHint: '[on|off|reload|packs|log|log clear|sidebar]',
       })
     } catch {
       // The filter works without its command.
@@ -539,30 +569,49 @@ export function register(on: On, options: PluginOptions) {
     return next(e)
   })
 
+  // A pause lasts one session: /clear ends it too.
+  on('session.end', async ($, e, next) => {
+    if (paused) {
+      paused = false
+      refilter($)
+    }
+    return next(e)
+  })
+
   on('tool.call', async ($, e, next) => {
     const l = await current($)
     const f = l.filter
-    if (f === null) {
-      if (l.error !== undefined) {
-        // The model is told there is a problem, never what it is: the
-        // message names packs, which would say what is being hidden.
-        return {
-          deny:
-            "topic-filter: tool calls are paused because the user's topic-filter settings have a problem. " +
-            'Ask the user to run /topic-filter to see it.',
-        }
+    const input = e as unknown as Record<string, unknown>
+
+    // These two hold while paused too: the list itself stays out of reach, and
+    // a file the model holds a filtered copy of cannot be overwritten whole.
+    // A topics file that failed to load still holds the list.
+    if ((f !== null || l.error !== undefined) && mentionsPath(input, l.path)) {
+      return { deny: 'topic-filter: that path holds the list of hidden topics, which this session may not read or change.' }
+    }
+    // Edit changes only the text it names, and fails if that text spans
+    // something hidden, so it stays allowed.
+    if (e.tool === 'Write' && typeof e.file_path === 'string' && filteredFiles.has(pathKey(e.file_path))) {
+      return {
+        deny:
+          'topic-filter: this file holds content hidden from this session, so overwriting it whole would delete ' +
+          'that content. Use Edit to change specific parts instead.',
       }
-      return next(e)
     }
 
-    const input = e as unknown as Record<string, unknown>
-    if (mentionsPath(input, l.path)) {
-      return { deny: 'topic-filter: that path holds the list of hidden topics, which this session may not read or change.' }
+    if (f === null && l.error !== undefined && !paused) {
+      // The model is told there is a problem, never what it is: the
+      // message names packs, which would say what is being hidden.
+      return {
+        deny:
+          "topic-filter: tool calls are paused because the user's topic-filter settings have a problem. " +
+          'Ask the user to run /topic-filter to see it.',
+      }
     }
 
     let call = e
-    if (!MODEL_FACING_TOOLS.has(e.tool)) {
-      const used = f.guardedIn(input)
+    if (f !== null && !MODEL_FACING_TOOLS.has(e.tool)) {
+      const used = paused ? [] : f.guardedIn(input)
       if (used.length > 0) {
         const names = used.join(', ')
         return {
@@ -575,18 +624,14 @@ export function register(on: On, options: PluginOptions) {
       if (restored.changed) call = restored.value as typeof e
     }
 
-    // A file read with lines dropped or terms hidden cannot be written back
-    // whole: the model's copy lacks what it never saw. Edit changes only the
-    // text it names, and fails if that text spans something hidden.
-    if (e.tool === 'Write' && typeof e.file_path === 'string' && filteredFiles.has(pathKey(e.file_path))) {
-      return {
-        deny:
-          'topic-filter: this file holds content hidden from this session, so overwriting it whole would delete ' +
-          'that content. Use Edit to change specific parts instead.',
-      }
-    }
-
     const result = await next(call)
+    if (paused || f === null) {
+      // Read whole while paused, the file can be written back without loss.
+      if (paused && e.tool === 'Read' && typeof e.file_path === 'string' && readWhole(input, result)) {
+        filteredFiles.delete(pathKey(e.file_path))
+      }
+      return result
+    }
     const seen = newTally()
     const filtered = filterResult(f, result, seen)
     counted($, seen, toolSource(e.tool, input), 'add', undefined, e.agentId)
@@ -601,7 +646,7 @@ export function register(on: On, options: PluginOptions) {
   }))
 
   on('prompt.submit', async ($, e, next) => {
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null) return next(e)
 
     const tally = newTally()
@@ -617,7 +662,7 @@ export function register(on: On, options: PluginOptions) {
   )
 
   on('prompt.context', async ($, e, next) => {
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null) return next(e)
 
     const r = await next(f.informModel ? { ...e, blocks: [...e.blocks, { name: 'topicFilter', text: EXPLAINER }] } : e)
@@ -641,7 +686,7 @@ export function register(on: On, options: PluginOptions) {
 
   on('prompt.section', async ($, e, next) => {
     const r = await next(e)
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null) return r
     const tally = newTally()
     // A section left out now clears its entry: an empty tally does that.
@@ -653,7 +698,7 @@ export function register(on: On, options: PluginOptions) {
 
   on('prompt.attachment', async ($, e, next) => {
     const r = await next(e)
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null || r.text === null) return r
     const tally = newTally()
     const text = f.text(r.text, tally)
@@ -666,7 +711,7 @@ export function register(on: On, options: PluginOptions) {
 
   on('skill.prompt', async ($, e, next) => {
     const r = await next(e)
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null) return r
     const tally = newTally()
     const text = f.text(r.text, tally)
@@ -676,14 +721,14 @@ export function register(on: On, options: PluginOptions) {
 
   on('tool.describe', async ($, e, next) => {
     const r = await next(e)
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null) return r
     const text = f.text(r.description, newTally(), false)
     return text.changed ? { ...r, description: text.value } : r
   }).catch(() => ({ description: 'topic-filter failed while checking this description, so it is withheld.' }))
 
   on('session.receive', async ($, e, next) => {
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null) return next(e)
     const tally = newTally()
     const text = f.text(e.text, tally, false)
@@ -696,6 +741,11 @@ export function register(on: On, options: PluginOptions) {
   on('command.run', async ($, e, next) => {
     if (e.command === COMMAND) {
       const arg = e.args.trim()
+      if (PAUSE_ARGS.has(arg) || RESUME_ARGS.has(arg)) {
+        const { lines, context } = await setPaused($, PAUSE_ARGS.has(arg), e.origin?.kind)
+        for (const line of [...lines, '(Shown to you only; Claude does not see this.)']) $.ui.log(line)
+        return context === undefined ? {} : { context: [context] }
+      }
       if (arg === 'reload') {
         loaded = undefined
         const first = await current($)
@@ -728,7 +778,7 @@ export function register(on: On, options: PluginOptions) {
     }
 
     const r = await next(e)
-    const f = (await current($)).filter
+    const f = await active($)
     if (f === null || r.text === undefined) return r
     const tally = newTally()
     const text = f.text(r.text, tally)
@@ -746,9 +796,53 @@ export function register(on: On, options: PluginOptions) {
     const agent = agentId === undefined ? undefined : await sidebarLabel($, agentId)
     return sidebarView(
       { Box, Text },
-      { summary: hiddenLog.summary(agentId), ...(agent === undefined ? {} : { agent }), countsOnly: pluginOptions.sidebarCountsOnly === true },
+      {
+        summary: hiddenLog.summary(agentId),
+        ...(agent === undefined ? {} : { agent }),
+        countsOnly: pluginOptions.sidebarCountsOnly === true,
+        isPaused: paused,
+      },
     )
   })
+}
+
+const PAUSE_ARGS = new Set(['off', 'pause', 'stop'])
+const RESUME_ARGS = new Set(['on', 'resume', 'start'])
+
+/**
+ * Pauses or resumes filtering. Answers the lines the person sees, and a note
+ * for the model when the state changed, so it knows whether placeholders
+ * are still refused.
+ */
+async function setPaused($: EngineInterface, pause: boolean, origin: string | undefined): Promise<{ lines: string[]; context?: string }> {
+  if (pause && !MAY_PAUSE.has(origin ?? '')) {
+    return { lines: ['Only you can pause topic-filter, by typing /topic-filter off. It stays on.'] }
+  }
+  const l = await current($)
+  const was = paused
+  paused = pause
+  if (was !== pause) refilter($)
+
+  if (pause) {
+    return {
+      lines: was
+        ? ['topic-filter is already paused. /topic-filter on resumes it.']
+        : [
+            'topic-filter paused: nothing is hidden until /topic-filter on.',
+            'What Claude already read stays as it was. A restart, /clear or a reload turns it back on.',
+          ],
+      ...(was ? {} : { context: 'The user paused topic-filter: tool output is no longer filtered, and placeholders are no longer refused.' }),
+    }
+  }
+
+  const on =
+    l.filter === null
+      ? statusText()
+      : `Filter on: ${count(l.config?.lists.length ?? 0, 'list')}, ${count(l.filter.termCount, 'term')}.`
+  return {
+    lines: [was ? on : `${on} (It was not paused.)`],
+    ...(was ? { context: 'The user turned topic-filter back on: hidden items are filtered again, and placeholders are refused in tool calls.' } : {}),
+  }
 }
 
 /** Opens the sidebar, or closes it when it is open; says which, for the person. */
@@ -803,6 +897,17 @@ function filterResult(f: Filter, r: ToolCallResult, seen: Tally): ToolCallResult
   const all = note === undefined ? kept : [...kept, note]
   // Without `ref`, core maps the filtered record for the model afresh.
   return all.length > 0 ? { result: record.value, context: all } : { result: record.value }
+}
+
+/**
+ * Whether a Read answered the whole file: no range asked, and every line
+ * returned (a long file is cut at the engine's line cap).
+ */
+function readWhole(input: Record<string, unknown>, r: ToolCallResult): boolean {
+  if (r.deny !== undefined || r.isError === true) return false
+  if (input.offset !== undefined || input.limit !== undefined || input.pages !== undefined) return false
+  const file = (r.result as { file?: { numLines?: unknown; totalLines?: unknown } } | undefined)?.file
+  return typeof file?.numLines === 'number' && file.numLines === file.totalLines
 }
 
 /** Whether a tool call names the topics file (best effort: a name match, not a sandbox). */

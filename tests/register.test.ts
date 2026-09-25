@@ -555,3 +555,143 @@ describe('sidebar', () => {
     })
   }
 })
+
+/** `/topic-filter <args>` as the person typed it at the prompt. */
+const typed = (args: string) => ({ command: 'topic-filter', args, origin: { kind: 'composer' } }) as never
+
+describe('pause', () => {
+  test('/topic-filter off lets output through and placeholders run; on filters again', async ($, on) => {
+    const shown = world(on)
+    const ran = tools(on)
+    const first = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
+    const name = placeholderIn((first.result as { stdout: string }).stdout)!
+
+    const off = await $.command.run(typed('off'))
+    expect(shown.logs[0]).toBe('topic-filter paused: nothing is hidden until /topic-filter on.')
+    expect(off.context?.[0]).toMatch(/^The user paused topic-filter/)
+    expect(shown.statuses.at(-1)).toMatch(/^PAUSED, nothing is hidden/)
+
+    const open = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
+    expect((open.result as { stdout: string }).stdout).toBe(GH_LIST)
+    expect(open.context).toBeUndefined()
+    const used = await $.tool.call({ tool: 'Bash', command: `grep ${name} notes.md` })
+    expect(used.deny).toBeUndefined()
+
+    const back = await $.command.run(typed('on'))
+    expect(shown.logs.join('\n')).toMatch(/Filter on: \d+ lists, 3 terms\./)
+    expect(back.context?.[0]).toMatch(/^The user turned topic-filter back on/)
+    const hidden = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
+    expect((hidden.result as { stdout: string }).stdout.includes('secret-repo')).toBe(false)
+    const refused = await $.tool.call({ tool: 'Bash', command: `grep ${placeholderIn((hidden.result as { stdout: string }).stdout)} notes.md` })
+    expect(refused.deny).toMatch(/is a placeholder for a hidden item/)
+    expect(ran).toEqual(['Bash', 'Bash', 'Bash', 'Bash'])
+  })
+
+  test('pause and stop are off too, and resume and start are on', async ($, on) => {
+    const shown = world(on)
+    tools(on)
+    for (const [arg, status] of [['pause', /^PAUSED/], ['resume', /^on, /], ['stop', /^PAUSED/], ['start', /^on, /]] as const) {
+      await $.command.run(typed(arg))
+      expect(shown.statuses.at(-1)).toMatch(status)
+    }
+  })
+
+  test('only the person can pause: a command from anywhere else leaves the filter on', async ($, on) => {
+    const shown = world(on)
+    tools(on)
+    for (const origin of [undefined, { kind: 'plugin', name: 'other' }, { kind: 'task-notification' }, { kind: 'peer' }, { kind: 'bridge' }]) {
+      const r = await $.command.run({ command: 'topic-filter', args: 'off', ...(origin === undefined ? {} : { origin }) } as never)
+      expect(r.context).toBeUndefined()
+    }
+    expect(shown.logs.filter(line => line.startsWith('Only you can pause'))).toHaveLength(5)
+    const r = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
+    expect((r.result as { stdout: string }).stdout.includes('secret-repo')).toBe(false)
+  })
+
+  test('paused, the topics file stays out of reach', async ($, on) => {
+    world(on)
+    const ran = tools(on)
+    await $.command.run(typed('off'))
+    const r = await $.tool.call({ tool: 'Bash', command: `cat ${TOPICS_PATH}` })
+    expect(r.deny).toMatch(/holds the list of hidden topics/)
+    expect(ran).toEqual([])
+  })
+
+  test('a file read whole while paused may be overwritten; one read in part may not', async ($, on) => {
+    world(on)
+    const FILE = 'C:\work\notes.md'
+    const content = '# Notes\nsecret-repo has the photos.\nGroceries\n'
+    const ran: string[] = []
+    on('tool.call', async ($, e) => {
+      ran.push(e.tool)
+      if (e.tool === 'Read') {
+        return { result: { type: 'text', file: { filePath: FILE, content, numLines: 3, startLine: 1, totalLines: 3 } }, text: content } as never
+      }
+      return { result: { filePath: FILE }, text: 'written' } as never
+    })
+    await $.tool.call({ tool: 'Read', file_path: FILE })
+    await $.command.run(typed('off'))
+
+    await $.tool.call({ tool: 'Read', file_path: FILE, offset: 2, limit: 1 })
+    const part = await $.tool.call({ tool: 'Write', file_path: FILE, content: 'x' })
+    expect(part.deny).toMatch(/overwriting it whole would delete/)
+
+    await $.tool.call({ tool: 'Read', file_path: FILE })
+    const whole = await $.tool.call({ tool: 'Write', file_path: FILE, content: 'x' })
+    expect(whole.deny).toBeUndefined()
+    expect(ran).toEqual(['Read', 'Read', 'Read', 'Write'])
+  })
+
+  test('paused while the settings are broken, the topics file stays out of reach', async ($, on) => {
+    world(on, '{ not json')
+    const ran = tools(on)
+    await $.command.run(typed('off'))
+    const own = await $.tool.call({ tool: 'Read', file_path: TOPICS_PATH })
+    expect(own.deny).toMatch(/holds the list of hidden topics/)
+    await $.tool.call({ tool: 'Bash', command: 'ls' })
+    expect(ran).toEqual(['Bash'])
+  })
+
+  test('a long file cut at the line cap is not read whole', async ($, on) => {
+    world(on)
+    const FILE = 'C:/work/long.md'
+    const content = '# Notes\nsecret-repo has the photos.\n'
+    const ran: string[] = []
+    on('tool.call', async ($, e) => {
+      ran.push(e.tool)
+      if (e.tool === 'Read') {
+        return { result: { type: 'text', file: { filePath: FILE, content, numLines: 2, startLine: 1, totalLines: 5000 } }, text: content } as never
+      }
+      return { result: { filePath: FILE }, text: 'written' } as never
+    })
+    await $.tool.call({ tool: 'Read', file_path: FILE })
+    await $.command.run(typed('off'))
+    await $.tool.call({ tool: 'Read', file_path: FILE })
+    const write = await $.tool.call({ tool: 'Write', file_path: FILE, content: 'x' })
+    expect(write.deny).toMatch(/overwriting it whole would delete/)
+    expect(ran).toEqual(['Read', 'Read'])
+  })
+
+  test('/clear ends the pause', async ($, on) => {
+    world(on)
+    tools(on)
+    on('session.end', async () => ({ sessionId: 's1' }))
+    await $.command.run(typed('off'))
+    await $.session.end({ reason: 'clear' } as never)
+    const r = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
+    expect((r.result as { stdout: string }).stdout.includes('secret-repo')).toBe(false)
+  })
+
+  for (const surface of SURFACES) {
+    test(`the sidebar says when filtering is paused (${surface})`, async ($, on) => {
+      world(on)
+      tools(on)
+      await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
+      await $.command.run(typed('off'))
+      const ui = await $.ui.mount({ plugin: 'topic-filter', surface, component: 'Pane', requestId: SIDEBAR_ID, props: paneProps() })
+      const lines = await textOf(ui)
+      expect(lines[0]).toBe(' PAUSED: nothing is hidden. /topic-filter on ')
+      expect(lines[1]).toBe('Hidden: 1 word, 1 line dropped')
+    })
+  }
+})

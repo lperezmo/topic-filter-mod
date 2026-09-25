@@ -7,11 +7,35 @@ description = "Genetic disorders and syndromes, and the vocabulary of genetics a
 
 datamuse = ["genetics", "heredity", "chromosome", "mutation"]
 
-extra_terms = []
+extra_terms = [
+  "Cas9",
+  "BRCA1",
+  "BRCA2",
+  "Huntington disease",
+  "Polygenic risk score",
+  "Genome-wide association study",
+  "GWAS",
+  "Trisomy 21",
+  "De novo mutation",
+  "Loss-of-function",
+]
 extra_hints = []
 
 # Judge would make these terms despite many dry-run hits in ordinary code.
-exclude = ["epistasis", "epistatic", "biallelic"]
+exclude = [
+  "epistasis",
+  "epistatic",
+  "biallelic",
+  "OoA",
+  "headcase",
+  "headful",
+  "tinman",
+  "trappin",
+  "shiverer",
+  "adventitious",
+  "lilliputian",
+  "anneal",
+]
 
 [[wikipedia]]
 category = "Genetic disorders by inheritance"

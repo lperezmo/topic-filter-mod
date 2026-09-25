@@ -17,11 +17,57 @@ extra_terms = [
   "Zapotec",
   "Egyptologist",
   "Pre-Columbian",
+  "Mayas",
+  "Incas",
+  "Tutankhamen",
+  "Khufu",
+  "Ramses",
+  "Mesoamerica",
+  "Hieroglyph",
+  "Hieroglyphs",
+  "Teotihuacan",
+  "Zapotecs",
+  "Mixtecs",
+  "Toltecs",
+  "King Tut",
 ]
 
 extra_hints = ["archaeologist", "anthropologist", "ethnographer", "ruins", "dig site"]
 
-exclude = []
+exclude = [
+  "Ake",
+  "akh",
+  "Apu",
+  "Bes",
+  "Geb",
+  "Iah",
+  "Ihy",
+  "Keb",
+  "khu",
+  "Kon",
+  "Kʼo",
+  "Qus",
+  "Sah",
+  "wug",
+  "Arty",
+  "Baka",
+  "Bata",
+  "Pomona",
+  "conehead",
+  "conjoin",
+  "troglodyte",
+  "cavewoman",
+  "mateship",
+  "fisherfolk",
+  "roofbox",
+  "uncontacted",
+  "unworked",
+  "unsided",
+  "keyness",
+  "syrinx",
+  "frit",
+  "alexithymic",
+]
 
 # Mesoamerica
 [[wikipedia]]

@@ -7,10 +7,33 @@ description = "Molecular biology techniques, cellular processes and anatomical t
 
 datamuse = ["biology", "organism", "physiology", "taxonomy"]
 
-extra_terms = []
+extra_terms = [
+  "CRISPR",
+  "Cas9",
+  "CRISPR-Cas9",
+  "Western blot",
+  "Southern blot",
+  "Northern blot",
+  "RNA-seq",
+  "ChIP-seq",
+  "scRNA-seq",
+  "TALEN",
+  "Femur",
+  "Humerus",
+  "Photosynthesis",
+  "Mitosis",
+]
 extra_hints = []
 
-exclude = []
+exclude = [
+  "Wingspan",
+  "Squelching",
+  "VectorDB",
+  "Biofact",
+  "Permissiveness",
+  "Paratype",
+  "Subvariety",
+]
 
 [[wikipedia]]
 category = "Molecular biology techniques"

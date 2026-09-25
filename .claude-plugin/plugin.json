@@ -1,6 +1,6 @@
 {
   "name": "topic-filter",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Hide chosen topics from Claude: listed terms become stable placeholder names (or their lines are dropped) in tool output, prompts, CLAUDE.md, memory and skills before the model reads them.",
   "author": {
     "name": "Luis Perez Morales",
@@ -9,12 +9,73 @@
   "homepage": "https://github.com/lperezmo/topic-filter-mod",
   "repository": "https://github.com/lperezmo/topic-filter-mod",
   "license": "GPL-3.0-only",
-  "keywords": ["mod", "function-hooks", "privacy", "redaction", "pseudonymization"],
+  "keywords": [
+    "mod",
+    "function-hooks",
+    "privacy",
+    "redaction",
+    "pseudonymization"
+  ],
   "userConfig": {
+    "hideTagged": {
+      "type": "boolean",
+      "title": "Hide repos tagged on GitHub",
+      "description": "Your repositories with one of the GitHub topics below drop out of everything Claude reads. Tag one with: gh repo edit OWNER/REPO --add-topic claude-hidden, then run /topic-filter reload.",
+      "default": true
+    },
+    "githubTopics": {
+      "type": "string",
+      "title": "GitHub topics",
+      "description": "Comma-separated topics that mark a repository as hidden.",
+      "default": "claude-hidden"
+    },
+    "hideAnthropology": {
+      "type": "boolean",
+      "title": "Hide anthropology",
+      "description": "The built-in anthropology pack: ancient Mesoamerican, Andean and Egyptian sites, civilizations, rulers and deities, and anthropology vocabulary.",
+      "default": false
+    },
+    "hideBiology": {
+      "type": "boolean",
+      "title": "Hide biology",
+      "description": "The built-in biology pack: molecular biology techniques, cellular processes and anatomical terms.",
+      "default": false
+    },
+    "hideChemistry": {
+      "type": "boolean",
+      "title": "Hide chemistry",
+      "description": "The built-in chemistry pack: chemical elements, named reactions, functional groups and laboratory equipment.",
+      "default": false
+    },
+    "hideCybersecurity": {
+      "type": "boolean",
+      "title": "Hide cybersecurity",
+      "description": "The built-in cybersecurity pack: named malware, worms and hacker groups, and security vocabulary.",
+      "default": false
+    },
+    "hideGenetics": {
+      "type": "boolean",
+      "title": "Hide genetics",
+      "description": "The built-in genetics pack: genetic disorders and syndromes, and genetics vocabulary.",
+      "default": false
+    },
+    "otherPacks": {
+      "type": "string",
+      "title": "Other packs",
+      "description": "Comma-separated names of your own packs (the packs folder under ~/.claude/topic-filter). /topic-filter packs lists them.",
+      "default": ""
+    },
+    "extraWords": {
+      "type": "string",
+      "title": "Extra words to hide",
+      "description": "Comma-separated words or names to hide. Kept in secure storage, not in settings.json.",
+      "sensitive": true,
+      "default": ""
+    },
     "configPath": {
       "type": "string",
-      "title": "Topics file",
-      "description": "Path to topics.json. Empty means ~/.claude/topic-filter/topics.json.",
+      "title": "Topics file (advanced)",
+      "description": "Optional, for per-list modes and restore lists. Empty means the default file in ~/.claude/topic-filter.",
       "default": ""
     }
   }

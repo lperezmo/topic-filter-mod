@@ -7,7 +7,23 @@ description = "Named malware, computer worms and hacker groups, and the vocabula
 
 datamuse = ["malware", "exploit", "breach", "intrusion"]
 
-extra_terms = []
+extra_terms = [
+  "WannaCry",
+  "WannaCrypt",
+  "NotPetya",
+  "Stuxnet",
+  "Duqu",
+  "Emotet",
+  "TrickBot",
+  "Qakbot",
+  "Mirai botnet",
+  "Conficker",
+  "Zeus Trojan",
+  "Keylogger",
+  "Spear-phishing",
+  "Cobalt Strike",
+  "Mimikatz",
+]
 extra_hints = []
 
 # Generic security/crypto vocabulary or judge terms with many dry-run hits
@@ -23,6 +39,18 @@ exclude = [
   "Malware",
   "pubkey",
   "Twofish",
+  "0wn",
+  "UXu",
+  "Gruel",
+  "Derp",
+  "Samy",
+  "Santy",
+  "Clop",
+  "pigpen",
+  "fractionate",
+  "tweakable",
+  "keyholder",
+  "idiomorph",
 ]
 
 [[wikipedia]]

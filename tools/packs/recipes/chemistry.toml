@@ -7,10 +7,26 @@ description = "Chemical elements, named reactions, functional groups and laborat
 
 datamuse = ["chemistry", "chemical", "reagent", "catalyst"]
 
-extra_terms = []
+extra_terms = [
+  "Sulphur",
+  "Deuterium",
+  "Tritium",
+  "Heavy water",
+  "Enantiomer",
+  "Enantiomers",
+  "Diastereomer",
+  "Molarity",
+  "Grignard reagent",
+  "Acetals",
+  "Aldehydes",
+  "Amides",
+]
 extra_hints = []
 
-exclude = []
+exclude = [
+  "balonium",
+  "Stopcock",
+]
 
 [[wikipedia]]
 category = "Chemical elements"

@@ -250,6 +250,10 @@ Read these before relying on it.
   from a filtered read loses the hidden lines. Only `Write` is refused.
 - **Sessions from before the mod was on** already hold the raw terms.
 - **Other plugins** that hook `tool.call` beneath this one see raw results.
+- **Your settings are readable.** The pack switches and GitHub topics you set
+  in `/plugin` are stored in `~/.claude/settings.json`, which Claude can read,
+  so they show which topics you hide (the extra words are in secure storage).
+  Only the topics file is guarded.
 
 ## Development
 

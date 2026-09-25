@@ -48,6 +48,11 @@ describe('matcher', () => {
     expect(found(m, 'the Pyramids of Giza and Giza itself')).toEqual(['Pyramids of Giza', 'Giza'])
   })
 
+  test('a literal \\n or \\t before a term is a word boundary', () => {
+    const m = matcherOf(ref('gpmap'))
+    expect(found(m, 'maps.\\ngpmap\\tpublic and \\tgpmap, not agpmap or \\xgpmap')).toEqual(['gpmap', 'gpmap'])
+  })
+
   test('finds a term inside a path', () => {
     const m = matcherOf(ref('secret-repo'))
     expect(found(m, 'D:\\Python\\secret-repo\\main.py and /home/me/secret-repo/')).toEqual(['secret-repo', 'secret-repo'])
@@ -148,6 +153,14 @@ describe('filter', () => {
     const tally = newTally()
     const r = f.text('lperezmo/public-repo\tpublic\nlperezmo/secret-repo\tprivate\nlperezmo/other\tpublic\n', tally)
     expect(r.value).toBe('lperezmo/public-repo\tpublic\nlperezmo/other\tpublic\n')
+    expect(tally.dropped).toBe(1)
+  })
+
+  test('drops the lines of output that prints its newlines as \\n text', () => {
+    const f = filter()
+    const tally = newTally()
+    const r = f.text('lperezmo/a\\tpublic\\nlperezmo/secret-repo\\tprivate\\nlperezmo/b\\tpublic\\n', tally)
+    expect(r.value).toBe('lperezmo/a\\tpublic\\nlperezmo/b\\tpublic\\n')
     expect(tally.dropped).toBe(1)
   })
 

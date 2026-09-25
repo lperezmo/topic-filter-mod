@@ -151,7 +151,8 @@ export class Filter {
 
     let out = text
     if (allowDrop && matches.some(m => m.ref.mode === 'drop-line')) {
-      const lines = text.split(/(?<=\n)/)
+      // A literal `\n` ends a line too: some output prints its newlines as text.
+      const lines = text.split(/(?<=\n|\\n)/)
       const kept = lines.filter(line => !this.matcher.find(line).some(m => m.ref.mode === 'drop-line'))
       tally.dropped += lines.length - kept.length
       if (kept.length === 0) return { value: '', changed: true, vanished: true }

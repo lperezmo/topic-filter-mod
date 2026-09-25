@@ -396,7 +396,8 @@ function statusText(): string {
 }
 
 function showStatus($: EngineInterface): void {
-  $.ui.status(statusText())
+  // The status line already names the plugin.
+  $.ui.status(statusText().replace(/^topic-filter: /, ''))
 }
 
 function counted($: EngineInterface, tally: Tally): void {

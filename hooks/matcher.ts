@@ -94,6 +94,14 @@ type Node = {
 
 const isWordAt = (text: string, i: number) => i >= 0 && i < text.length && WORD.test(text[i]!)
 
+/**
+ * A literal escape such as `\n` or `\t` (backslash, letter) ends the word
+ * before it: `gh --template '...\n...'` and logs print them as text, and
+ * `\ngpmap` must still find `gpmap`.
+ */
+const startsWord = (text: string, i: number) =>
+  !isWordAt(text, i - 1) || (text[i - 2] === '\\' && 'ntr'.includes(text[i - 1]!))
+
 /** Matches a set of terms in text, leftmost first and longest at each start. */
 export class Matcher {
   private readonly root: Node = { next: new Map() }
@@ -172,7 +180,7 @@ export class Matcher {
   private longestAt(t: string, i: number): [number, TermRef, number] | undefined {
     if (t[i] === ' ') return undefined
 
-    const boundaryBefore = !isWordAt(t, i - 1)
+    const boundaryBefore = startsWord(t, i)
     let node: Node | undefined = this.root
     let best: [number, TermRef, number] | undefined
     let j = i

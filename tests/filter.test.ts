@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { parseConfig, type Config } from '../hooks/config.ts'
+import { closestName, parseConfig, parsePack, type Config } from '../hooks/config.ts'
 import { foldTerm, Matcher, type TermRef } from '../hooks/matcher.ts'
 import { assignPlaceholders, findPlaceholders } from '../hooks/placeholders.ts'
 import { Filter, newTally, noteFor } from '../hooks/redact.ts'
@@ -94,6 +94,44 @@ const CONFIG: Config = parseConfig(
 )
 
 const filter = () => new Filter(CONFIG, 'test-salt-0123456789')
+
+describe('config and packs', () => {
+  test('a pack name must be a plain name, never a path', () => {
+    expect(() => parseConfig('{"lists": [{"pack": "../secrets"}]}')).toThrow(/lists\[0\]\.pack must be a pack name/)
+  })
+
+  test('pack errors name the pack and a position, never a term', () => {
+    expect(() => parsePack('{"terms": ["Teotihuacan", 5]}', 'demo')).toThrow('pack "demo" terms[1] must be a string')
+    expect(() => parsePack('nope', 'demo')).toThrow('pack "demo" is not valid JSON')
+  })
+
+  test('a mistyped pack name gets the closest real one, or nothing', () => {
+    const names = ['anthropology', 'paleontology', 'sports', 'video-games']
+    expect(closestName('paleontolgy', names)).toBe('paleontology')
+    expect(closestName('video', names)).toBe('video-games')
+    expect(closestName('sport', names)).toBe('sports')
+    expect(closestName('cooking', names)).toBeUndefined()
+  })
+
+  test("a pack's terms match whole words even in a substring list", () => {
+    const config = parseConfig(JSON.stringify({ lists: [{ match: 'substring', terms: ['maya'] }] }))
+    const f = new Filter(config, 'salt-0123456789abcdef', new Map(), new Map([[0, ['giza']]]))
+    const tally = newTally()
+    f.text('Mayapan and Gizamatic, then Giza', tally)
+    expect(tally.replaced).toBe(2)
+  })
+
+  test('a pack without hints is fine', () => {
+    expect(parsePack('{"terms": ["a"]}', 'demo')).toEqual({ name: 'demo', description: '', terms: ['a'], hints: [] })
+  })
+
+  test('exclude takes a term out of its list, by folded form', () => {
+    const config = parseConfig(JSON.stringify({ lists: [{ terms: ['Teotihuacan', 'Giza'], exclude: ['TEOTIHUACÁN'] }] }))
+    const f = new Filter(config, 'salt-0123456789abcdef')
+    expect(f.termCount).toBe(1)
+    expect(f.text('Teotihuacan and Giza', newTally()).value.startsWith('Teotihuacan and ')).toBe(true)
+  })
+})
 
 describe('filter', () => {
   test('replaces a term and keeps the rest of the text', () => {

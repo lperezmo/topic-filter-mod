@@ -17,14 +17,17 @@
 // Every hook fails closed: when filtering throws or overruns, what it was
 // filtering is withheld, never passed through.
 
-import type { EngineInterface, On, PluginOptions, ToolCallResult } from 'claude-code'
+import type { EngineInterface, FsEntry, On, PluginOptions, ToolCallResult } from 'claude-code'
 
-import { ConfigError, parseConfig, type Config } from './config.ts'
+import { closestName, ConfigError, parseConfig, parsePack, SLUG, type Config, type Pack } from './config.ts'
 import { fnv1a } from './placeholders.ts'
 import { Filter, forEachString, newTally, noteFor, type Tally } from './redact.ts'
 
 const COMMAND = 'topic-filter'
 const DEFAULT_CONFIG = '.claude/topic-filter/topics.json'
+
+/** The person's own packs, under the home directory; the plugin's folder is replaced on update. */
+const USER_PACKS = '.claude/topic-filter/packs'
 
 /** How long a checked config stays trusted before the file is looked at again. */
 const RECHECK_MS = 1000
@@ -59,7 +62,14 @@ const EXPLAINER =
 type Loaded = {
   key: string
   path: string
+  /** The pack files the key covers, found or not. */
+  deps: string[]
+  /** Which pack each list got its terms from, by list index. */
+  packsUsed: Map<number, PackUse>
+  /** The settings the filter was built from: the last good ones. */
   config: Config | null
+  /** The settings as the file says now, even when they could not be used; what the person is shown. */
+  latest: Config | null
   filter: Filter | null
   /** Why the file could not be used; the filter kept is the last good one, if any. */
   error?: string
@@ -89,12 +99,174 @@ const pathKey = (path: string) => path.replace(/\\/g, '/').toLowerCase()
 /** Whether what the model read lacks something a whole-file rewrite would lose. */
 const hidesContent = (f: Filter, seen: Tally) => seen.dropped > 0 || [...seen.names].some(name => f.guarded.has(name))
 
-async function pathOf($: EngineInterface): Promise<string> {
+async function homeOf($: EngineInterface): Promise<string> {
   // USERPROFILE first: on Windows it is where Claude Code keeps ~/.claude,
   // while HOME may be unset or a POSIX spelling from a Unix-like shell.
-  const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME')) ?? ''
+  return (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME')) ?? ''
+}
+
+async function pathOf($: EngineInterface): Promise<string> {
+  const home = await homeOf($)
   if (configured === '') return `${home}/${DEFAULT_CONFIG}`
   return configured.startsWith('~') ? home + configured.slice(1) : configured
+}
+
+/** A file's identity for the cache key: its path and, when it exists, its size and time. */
+async function statKey($: EngineInterface, path: string): Promise<string> {
+  try {
+    const stat = await $.fs.stat(path)
+    return `${path}|${stat.mtimeMs}|${stat.size}`
+  } catch {
+    return `${path}|missing`
+  }
+}
+
+/** Which pack file a list got its terms from. */
+type PackUse = { name: string; where: PackWhere; terms: number }
+
+type PackWhere = 'yours' | 'built-in'
+
+/** One pack file found on disk. */
+type PackEntry = {
+  name: string
+  where: PackWhere
+  /** Undefined when the file is not a valid pack. */
+  pack?: Pack
+  /** A built-in pack that one of yours with the same name replaces. */
+  isReplaced: boolean
+}
+
+/**
+ * The terms of every pack the topics file names, per list index, and which
+ * file each came from. The person's own pack wins over a built-in one of the
+ * same name, so copying a built-in pack there and editing it is how one is
+ * customized; the plugin's own folder is replaced on every update.
+ */
+async function loadPacks(
+  $: EngineInterface,
+  config: Config,
+  home: string,
+): Promise<{ terms: Map<number, string[]>; used: Map<number, PackUse> }> {
+  const terms = new Map<number, string[]>()
+  const used = new Map<number, PackUse>()
+
+  for (const [i, list] of config.lists.entries()) {
+    if (list.pack === undefined) continue
+    const [mine, builtIn] = packPaths(home, $.plugin.root, list.pack)
+
+    let text: string
+    let where: PackWhere = 'yours'
+    try {
+      text = await $.fs.read(mine)
+    } catch {
+      where = 'built-in'
+      try {
+        text = await $.fs.read(builtIn)
+      } catch {
+        const names = [...new Set((await findPacks($, home)).map(entry => entry.name))]
+        throw new ConfigError(missingPack(list.pack, i, names))
+      }
+    }
+    const pack = parsePack(text, list.pack)
+    terms.set(i, pack.terms)
+    used.set(i, { name: list.pack, where, terms: pack.terms.length })
+  }
+
+  return { terms, used }
+}
+
+/** What to tell the person about a pack that does not exist; its first sentence fits a status line. */
+function missingPack(name: string, list: number, available: readonly string[]): string {
+  const guess = closestName(name, available)
+  return [
+    `Pack "${name}" (lists[${list}]) was not found.`,
+    guess === undefined ? '' : `Did you mean "${guess}"?`,
+    available.length === 0 ? 'No packs are installed.' : `Available: ${available.join(', ')}.`,
+    `Run /topic-filter packs to see what each covers, or make your own at ~/${USER_PACKS}/${name}.json.`,
+  ]
+    .filter(part => part !== '')
+    .join(' ')
+}
+
+const count = (n: number, noun: string) => `${n.toLocaleString('en-US')} ${noun}${n === 1 ? '' : 's'}`
+
+/** Where a pack may be: the person's folder first, then the plugin's own. */
+function packPaths(home: string, root: string, name: string): [string, string] {
+  return [`${home}/${USER_PACKS}/${name}.json`, `${root}/packs/${name}.json`]
+}
+
+/** Every pack file there is, yours first, each folder by name. */
+async function findPacks($: EngineInterface, home: string): Promise<PackEntry[]> {
+  const places: { where: PackWhere; dir: string }[] = [
+    { where: 'yours', dir: `${home}/${USER_PACKS}` },
+    { where: 'built-in', dir: `${$.plugin.root}/packs` },
+  ]
+  const mine = new Set<string>()
+  const found: PackEntry[] = []
+
+  for (const { where, dir } of places) {
+    let entries: FsEntry[]
+    try {
+      entries = await $.fs.list(dir)
+    } catch {
+      continue
+    }
+    for (const entry of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
+      const name = entry.name.replace(/\.json$/, '')
+      if (entry.kind !== 'file' || name === entry.name || !SLUG.test(name)) continue
+      let pack: Pack | undefined
+      try {
+        pack = parsePack(await $.fs.read(`${dir}/${entry.name}`), name)
+      } catch {
+        pack = undefined
+      }
+      found.push({ name, where, pack, isReplaced: where === 'built-in' && mine.has(name) })
+      if (where === 'yours') mine.add(name)
+    }
+  }
+
+  return found
+}
+
+/**
+ * The pack listing, for the person only: every pack with what it covers,
+ * its counts, and which of your lists use it, plus any list naming a pack
+ * that does not exist.
+ */
+async function packListing($: EngineInterface, l: Loaded): Promise<string[]> {
+  const entries = await findPacks($, await homeOf($))
+  const users = new Map<string, string[]>()
+  for (const list of l.latest?.lists ?? []) {
+    if (list.pack !== undefined) users.set(list.pack, [...(users.get(list.pack) ?? []), `"${list.name}"`])
+  }
+
+  const lines = ['Topic packs (yours first, then built-in):']
+  for (const entry of entries) {
+    const head = `  ${entry.name} (${entry.where})`
+    if (entry.isReplaced) {
+      lines.push(`${head}: replaced by yours`)
+      continue
+    }
+    if (entry.pack === undefined) {
+      lines.push(`${head}: not a valid pack file`)
+      continue
+    }
+    const inUse = users.get(entry.name)
+    lines.push(
+      `${head}: ${count(entry.pack.terms.length, 'term')}, ${count(entry.pack.hints.length, 'hint')}` +
+        (inUse === undefined ? '' : `, used by ${inUse.join(', ')}`),
+    )
+    if (entry.pack.description !== '') lines.push(`      ${entry.pack.description}`)
+  }
+  if (entries.length === 0) lines.push('  none installed')
+
+  const names = new Set(entries.map(entry => entry.name))
+  for (const [name, lists] of users) {
+    if (!names.has(name)) lines.push(`  ${name}: NOT FOUND, named by ${lists.join(', ')}`)
+  }
+
+  lines.push(`Your own packs go in ~/${USER_PACKS}/<name>.json; a list uses one with "pack": "<name>".`)
+  return lines
 }
 
 async function saltOf($: EngineInterface): Promise<string> {
@@ -109,26 +281,29 @@ async function saltOf($: EngineInterface): Promise<string> {
 async function current($: EngineInterface): Promise<Loaded> {
   if (loaded !== undefined && Date.now() - checkedAt < RECHECK_MS) return loaded
 
+  // The key covers the topics file, the repositories found by topic, and
+  // every pack file the last build read, so editing any of them is seen.
   const path = await pathOf($)
-  let key: string
-  try {
-    const stat = await $.fs.stat(path)
-    key = `${path}|${stat.mtimeMs}|${stat.size}|${githubKey}`
-  } catch {
-    key = `${path}|missing`
-  }
+  const topicsKey = await statKey($, path)
+  const deps = loaded?.path === path ? loaded.deps : []
+  const key = [topicsKey, githubKey, ...(await Promise.all(deps.map(d => statKey($, d))))].join('\n')
   checkedAt = Date.now()
 
   if (loaded?.key === key) return loaded
   if (loading?.key === key) return loading.promise
 
   const previous = loaded
-  const promise = build($, path, key, previous)
+  const promise = build($, path, topicsKey, previous)
   loading = { key, promise }
   try {
     loaded = await promise
   } finally {
     if (loading?.key === key) loading = undefined
+  }
+
+  // A new problem is shown once where the person looks; the status line keeps it.
+  if (loaded.error !== undefined && loaded.error !== previous?.error) {
+    $.ui.toast(`topic-filter: ${firstSentence(loaded.error)} Run /topic-filter for details.`, { timeoutMs: 10_000 })
   }
 
   // Cached answers were computed from the old file.
@@ -142,15 +317,37 @@ async function current($: EngineInterface): Promise<Loaded> {
   return loaded
 }
 
-async function build($: EngineInterface, path: string, key: string, previous: Loaded | undefined): Promise<Loaded> {
-  if (key.endsWith('|missing')) return { key, path, config: null, filter: null }
+async function build($: EngineInterface, path: string, topicsKey: string, previous: Loaded | undefined): Promise<Loaded> {
+  if (topicsKey.endsWith('|missing')) {
+    return { key: [topicsKey, githubKey].join('\n'), path, deps: [], packsUsed: new Map(), config: null, latest: null, filter: null }
+  }
 
+  let deps: string[] = previous?.deps ?? []
+  let latest: Config | null = previous?.latest ?? null
   try {
     const config = parseConfig(await $.fs.read(path))
-    return { key, path, config, filter: new Filter(config, await saltOf($), githubTerms) }
+    latest = config
+    // Both places of every named pack, found or not: creating or editing
+    // either one is then noticed.
+    const home = await homeOf($)
+    deps = config.lists.flatMap(list => (list.pack === undefined ? [] : packPaths(home, $.plugin.root, list.pack)))
+    const packs = await loadPacks($, config, home)
+    const key = [topicsKey, githubKey, ...(await Promise.all(deps.map(d => statKey($, d))))].join('\n')
+    const filter = new Filter(config, await saltOf($), githubTerms, packs.terms)
+    return { key, path, deps, packsUsed: packs.used, config, latest, filter }
   } catch (error) {
     const message = error instanceof ConfigError ? error.message : 'the file could not be read'
-    return { key, path, config: previous?.config ?? null, filter: previous?.filter ?? null, error: message }
+    const key = [topicsKey, githubKey, ...(await Promise.all(deps.map(d => statKey($, d))))].join('\n')
+    return {
+      key,
+      path,
+      deps,
+      packsUsed: previous?.packsUsed ?? new Map(),
+      config: previous?.config ?? null,
+      latest,
+      filter: previous?.filter ?? null,
+      error: message,
+    }
   }
 }
 
@@ -186,11 +383,15 @@ async function refreshGithub($: EngineInterface, config: Config): Promise<void> 
   checkedAt = 0
 }
 
+/** A message's first sentence: a period followed by a space or the end, so `lists[0].pack` is not one. */
+const firstSentence = (text: string) => /^.*?[.?!](?=\s|$)/.exec(text)?.[0] ?? text
+
+/** The status line: UI only, never sent to the model, so it may name packs and problems. */
 function statusText(): string {
   if (loaded === undefined || (loaded.filter === null && loaded.error === undefined)) return 'topic-filter: off (no topics file)'
-  if (loaded.filter === null) return `topic-filter: BLOCKING, topics file error: ${loaded.error}`
-  const base = `topic-filter: on, ${loaded.filter.termCount} terms, ${hiddenCount} hidden`
-  if (loaded.error !== undefined) return `${base} (file error, using last good list: ${loaded.error})`
+  if (loaded.filter === null) return `topic-filter: BLOCKING tool calls. ${firstSentence(loaded.error ?? '')} Run /topic-filter.`
+  const base = `topic-filter: on, ${count(loaded.filter.termCount, 'term')}, ${hiddenCount} hidden`
+  if (loaded.error !== undefined) return `${base}. Using the last good settings: ${firstSentence(loaded.error)} Run /topic-filter.`
   return githubProblem === undefined ? base : `${base} (${githubProblem})`
 }
 
@@ -205,15 +406,28 @@ function counted($: EngineInterface, tally: Tally): void {
   showStatus($)
 }
 
-function describe(l: Loaded): string {
-  const lines = [statusText().replace(/^topic-filter: /, 'topic-filter is ')]
-  lines.push(`Topics file: ${l.path}`)
-  if (l.config !== null) {
-    const drop = l.config.lists.filter(list => list.mode === 'drop-line').length
-    lines.push(`${l.config.lists.length} lists (${drop} dropping lines), ${l.filter?.termCount ?? 0} distinct terms.`)
+/** The overview `/topic-filter` shows the person: every list and where its terms come from. */
+function describe(l: Loaded): string[] {
+  const lines = [statusText().replace(/^topic-filter: /, 'topic-filter is '), `Topics file: ${l.path}`]
+  if (l.error !== undefined) lines.push(`Problem: ${l.error}`)
+  if (l.latest !== null) {
+    lines.push('Lists:')
+    l.latest.lists.forEach((list, i) => {
+      const parts: string[] = [list.mode]
+      const pack = l.packsUsed.get(i)
+      if (pack !== undefined) parts.push(`pack ${pack.name} (${pack.where}, ${count(pack.terms, 'term')})`)
+      else if (list.pack !== undefined) parts.push(`pack ${list.pack} (NOT FOUND)`)
+      if (list.githubTopic !== undefined) {
+        parts.push(`GitHub topic ${list.githubTopic} (${count(githubTerms.get(i)?.length ?? 0, 'repo')})`)
+      }
+      if (list.terms.length > 0) parts.push(count(list.terms.length, 'own term'))
+      if (list.exclude.length > 0) parts.push(`${list.exclude.length} excluded`)
+      lines.push(`  "${list.name}": ${parts.join(', ')}`)
+    })
     if ((l.filter?.skippedTerms ?? 0) > 0) lines.push(`${l.filter?.skippedTerms} terms were too short to use.`)
   }
-  return lines.join('\n')
+  lines.push('Run /topic-filter packs to see every pack.')
+  return lines
 }
 
 export function register(on: On, options: PluginOptions) {
@@ -223,8 +437,8 @@ export function register(on: On, options: PluginOptions) {
     try {
       await $.command.register({
         name: COMMAND,
-        description: 'Show what topic-filter is hiding (counts only); `reload` re-reads the topics file',
-        argumentHint: '[reload]',
+        description: 'Show what topic-filter is hiding (counts only); `packs` lists topic packs; `reload` re-reads everything',
+        argumentHint: '[reload|packs]',
       })
     } catch {
       // The filter works without its command.
@@ -244,7 +458,13 @@ export function register(on: On, options: PluginOptions) {
     const f = l.filter
     if (f === null) {
       if (l.error !== undefined) {
-        return { deny: `topic-filter: tool calls are refused until the topics file is fixed (${l.error}).` }
+        // The model is told there is a problem, never what it is: the
+        // message names packs, which would say what is being hidden.
+        return {
+          deny:
+            "topic-filter: tool calls are paused because the user's topic-filter settings have a problem. " +
+            'Ask the user to run /topic-filter to see it.',
+        }
       }
       return next(e)
     }
@@ -374,13 +594,22 @@ export function register(on: On, options: PluginOptions) {
 
   on('command.run', async ($, e, next) => {
     if (e.command === COMMAND) {
-      if (e.args.trim() === 'reload') {
+      const arg = e.args.trim()
+      if (arg === 'reload') {
         loaded = undefined
-        const l = await current($)
-        if (l.config !== null) await refreshGithub($, l.config)
+        const first = await current($)
+        if (first.config !== null) await refreshGithub($, first.config)
+        $.ui.invalidate('prompt.section')
+        $.ui.invalidate('prompt.context')
+        $.ui.invalidate('prompt.attachment')
+        $.ui.invalidate('tool.describe')
       }
+      // Shown to the person only: `ui.log` lines never reach the model, and
+      // these name packs and lists, which would say what is being hidden.
       const l = await current($)
-      return { text: describe(l) }
+      const lines = arg === 'packs' ? await packListing($, l) : describe(l)
+      for (const line of [...lines, '(Shown to you only; Claude does not see this.)']) $.ui.log(line)
+      return {}
     }
 
     const r = await next(e)

@@ -76,21 +76,36 @@ export class Filter {
   /**
    * @param config the parsed topics file
    * @param salt this machine's salt for placeholder names
-   * @param extraTerms more terms per list index (repositories found by topic)
+   * @param extraTerms more terms per list index (repositories found by topic), matched as the list says
+   * @param packTerms a pack's terms per list index, always matched as whole words: thousands of
+   *   terms matched inside words would hide text everywhere
    */
-  constructor(config: Config, salt: string, extraTerms: ReadonlyMap<number, readonly string[]> = new Map()) {
+  constructor(
+    config: Config,
+    salt: string,
+    extraTerms: ReadonlyMap<number, readonly string[]> = new Map(),
+    packTerms: ReadonlyMap<number, readonly string[]> = new Map(),
+  ) {
     this.informModel = config.informModel
 
     const refs: TermRef[] = []
     let skipped = 0
     config.lists.forEach((list, i) => {
-      for (const term of [...list.terms, ...(extraTerms.get(i) ?? [])]) {
-        const folded = foldTerm(term)
-        if (folded.length < MIN_TERM_LENGTH) {
-          skipped += 1
-          continue
+      const excluded = new Set(list.exclude.map(foldTerm))
+      const sources: [readonly string[], boolean][] = [
+        [[...list.terms, ...(extraTerms.get(i) ?? [])], list.match === 'word'],
+        [packTerms.get(i) ?? [], true],
+      ]
+      for (const [terms, isWordOnly] of sources) {
+        for (const term of terms) {
+          const folded = foldTerm(term)
+          if (folded.length < MIN_TERM_LENGTH) {
+            skipped += 1
+            continue
+          }
+          if (excluded.has(folded)) continue
+          refs.push({ folded, canonical: term.trim(), list: i, mode: list.mode, isWordOnly })
         }
-        refs.push({ folded, canonical: term.trim(), list: i, mode: list.mode, isWordOnly: list.match === 'word' })
       }
     })
     this.skippedTerms = skipped

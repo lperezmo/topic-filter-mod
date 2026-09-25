@@ -35,8 +35,12 @@ Nothing happens until a topics file exists. Copy
 `~/.claude/topic-filter/topics.json` and edit it. To keep it elsewhere, set the
 plugin's `configPath` option in `/config`.
 
-Run `/topic-filter` in a session to see what it is doing (counts only, never
-terms), and `/topic-filter reload` after editing the file or tagging repos.
+Run `/topic-filter` in a session to see each list and where its terms come
+from, `/topic-filter packs` to see every topic pack and which lists use it,
+and `/topic-filter reload` after tagging repos. Both show counts, never terms,
+and are shown to you only: they name packs and lists, which would tell Claude
+what is being hidden. Edits to the topics file and packs are picked up on
+their own.
 The status line shows `topic-filter: on, N terms, M hidden`.
 
 ## The topics file
@@ -63,6 +67,8 @@ The status line shows `topic-filter: on, N terms, M hidden`.
 | `lists[].match` | `word` | `word` matches whole words only. `substring` matches inside words too (`maya` in `Mayapan`). |
 | `lists[].restore` | `false` | When the model uses this list's placeholder in a tool call, write the real term back instead of refusing. For drafting text that must contain real names the model should not read. |
 | `lists[].githubTopic` | none | At session start, every repository of yours tagged with this GitHub topic joins the list (`gh repo list --topic`). The last good answer is used if `gh` fails. |
+| `lists[].pack` | none | A [topic pack](#topic-packs) whose terms join the list. |
+| `lists[].exclude` | `[]` | Terms to leave out of the list, whatever brought them in (a pack, a GitHub topic, `terms`). Matched the same forgiving way as terms. |
 
 Matching ignores case and accents (`Teotihuacán` = `teotihuacan`), treats
 spaces, hyphens and underscores as one separator (`secret repo` also finds
@@ -73,6 +79,49 @@ A term keeps the same placeholder in every session. The names are derived from
 the term and a random salt kept in the plugin's store, so memory files and the
 prompt cache stay consistent, and the word list alone does not reveal the
 mapping.
+
+### Topic packs
+
+A pack is a ready-made term list for one topic, so you do not have to type
+every name yourself. Point a list at one:
+
+```json
+{ "lists": [{ "name": "anthropology", "pack": "anthropology", "exclude": ["Maya"], "terms": ["my extra word"] }] }
+```
+
+The list keeps its own `mode`, `match` and `restore`, `exclude` drops pack
+terms you do not want hidden, and `terms` adds your own. `/topic-filter packs`
+lists every pack with what it covers and its counts (never its terms), and
+marks which of your lists use it.
+
+A pack name that does not exist is never ignored quietly, since that would
+hide nothing while looking set up. Tool calls pause, the status line and a
+toast name the missing pack, and `/topic-filter` suggests the closest real
+one ("Did you mean paleontology?") and lists what is available. Claude only
+hears that the settings have a problem, not which pack.
+
+**Built-in packs** ship in this repository's [`packs/`](packs) folder and are
+built by the script in [`tools/packs/`](tools/packs) from Wikipedia and
+Wiktionary categories, word-frequency data and a dry run against ordinary
+code, with a review report per pack in `tools/packs/reports/`.
+
+**Your own packs** go in `~/.claude/topic-filter/packs/<name>.json`. A pack
+there replaces a built-in one of the same name, so to customize a built-in
+pack, copy it there and edit the copy. Never edit the plugin's own folder:
+Claude Code replaces it on every update. The format:
+
+```json
+{
+  "name": "my-topic",
+  "description": "What it covers.",
+  "terms": ["Hidden on sight", "Another one"],
+  "hints": ["loose", "related", "words"]
+}
+```
+
+Only `terms` hide anything today; `hints` are kept for a later version that
+takes a closer look at paragraphs mentioning them. Editing a pack file takes
+effect on the next tool call, no restart needed.
 
 ### Hiding repositories without deleting them
 

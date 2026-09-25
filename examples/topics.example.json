@@ -11,7 +11,9 @@
     {
       "name": "anthropology",
       "mode": "replace",
-      "terms": ["Teotihuacan", "Chichen Itza", "Maya", "Pyramids of Giza"]
+      "pack": "anthropology",
+      "exclude": ["Maya"],
+      "terms": ["Teotihuacan", "Pyramids of Giza"]
     },
     {
       "name": "email-contacts",

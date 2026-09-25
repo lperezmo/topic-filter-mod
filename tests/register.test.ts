@@ -1,14 +1,39 @@
 import type { On } from 'claude-code'
-import { describe, expect, mock, test } from 'claude-code/testing'
+import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 
 // The world beneath the plugin: a home directory, a topics file (or none),
-// a store, and a status line that goes nowhere.
+// pack files (the person's own and built-in ones), a store, and a status
+// line that goes nowhere.
 
 const HOME = '/home/tester'
 const TOPICS_PATH = `${HOME}/.claude/topic-filter/topics.json`
+const USER_PACKS = `${HOME}/.claude/topic-filter/packs`
 
-/** The host resolves a path before hooks see it (on Windows, `/home/x` is `D:\home\x`). */
-const isTopics = (path: string) => path.replace(/\\/g, '/').endsWith(TOPICS_PATH)
+/** Pack files by name: the person's own folder, and the plugin's `packs/`. */
+type Packs = { mine?: Record<string, string>; builtIn?: Record<string, string> }
+
+const pack = (terms: string[], hints: string[] = []) => JSON.stringify({ name: 'x', terms, hints })
+
+/**
+ * The file a path names in this world, or undefined. The host resolves a
+ * path before hooks see it (on Windows, `/home/x` is `D:\home\x`), so paths
+ * are compared by their end.
+ */
+function fileAt(path: string, topics: string | null, packs: Packs): string | undefined {
+  const p = path.replace(/\\/g, '/')
+  if (p.endsWith(TOPICS_PATH)) return topics ?? undefined
+  const name = /\/packs\/([a-z0-9-]+)\.json$/.exec(p)?.[1]
+  if (name === undefined) return undefined
+  return p.includes(`${USER_PACKS}/`) ? packs.mine?.[name] : packs.builtIn?.[name]
+}
+
+/** The pack files a folder lists in this world. */
+function filesIn(path: string, packs: Packs): string[] | undefined {
+  const p = path.replace(/\\/g, '/').replace(/\/$/, '')
+  if (p.endsWith(USER_PACKS)) return Object.keys(packs.mine ?? {})
+  if (p.endsWith('/packs')) return Object.keys(packs.builtIn ?? {})
+  return undefined
+}
 
 const TOPICS = JSON.stringify({
   lists: [
@@ -19,20 +44,42 @@ const TOPICS = JSON.stringify({
 
 const GH_LIST = 'lperezmo/public-repo\tA public one\tpublic\nlperezmo/secret-repo\tHidden\tprivate\nlperezmo/notes\tAbout Teotihuacan\tpublic\n'
 
-function world(on: On, topics: string | null = TOPICS) {
+function world(on: On, topics: string | null = TOPICS, packs: Packs = {}) {
   mock.env(on, { HOME })
   mock.store(on)
   // An op hook answers `{ value }`, or `{ deny }` for the call to reject.
-  on('fs.stat', async ($, e) =>
-    topics !== null && isTopics(e.path)
-      ? { value: { kind: 'file' as const, size: topics.length, mtimeMs: 1, isLink: false } }
-      : { deny: `ENOENT: ${e.path}` },
-  )
-  on('fs.read', async ($, e) =>
-    topics !== null && isTopics(e.path) ? { value: topics } : { deny: `ENOENT: ${e.path}` },
-  )
-  on('ui.status', () => ({ value: undefined }))
+  on('fs.stat', async ($, e) => {
+    const text = fileAt(e.path, topics, packs)
+    return text === undefined
+      ? { deny: `ENOENT: ${e.path}` }
+      : { value: { kind: 'file' as const, size: text.length, mtimeMs: 1, isLink: false } }
+  })
+  on('fs.read', async ($, e) => {
+    const text = fileAt(e.path, topics, packs)
+    return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
+  })
+  on('fs.list', async ($, e) => {
+    const names = filesIn(e.path, packs)
+    return names === undefined
+      ? { deny: `ENOENT: ${e.path}` }
+      : { value: names.map(n => ({ name: `${n}.json`, kind: 'file' as const, size: 1, isLink: false })) }
+  })
+  // What the person sees, which never reaches the model.
+  const shown = { statuses: [] as string[], logs: [] as string[], toasts: [] as string[] }
+  on('ui.status', ($, e) => {
+    if (e.text !== undefined) shown.statuses.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.log', ($, e) => {
+    shown.logs.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.toast', ($, e) => {
+    shown.toasts.push(e.text)
+    return { value: undefined }
+  })
   on('ui.invalidate', () => ({ value: undefined }))
+  return shown
 }
 
 /** Answers every tool call the way core would for `gh repo list`, and records what ran. */
@@ -95,12 +142,14 @@ describe('tool output', () => {
     expect((r.result as { stdout: string }).stdout).toBe(GH_LIST)
   })
 
-  test('refuses tool calls while the topics file is broken, naming no term', async ($, on) => {
-    world(on, '{"lists": [{"terms": ["Teotihuacan", 5]}]}')
+  test('pauses tool calls while the topics file is broken, telling the model nothing specific', async ($, on) => {
+    const shown = world(on, '{"lists": [{"terms": ["Teotihuacan", 5]}]}')
     const ran = tools(on)
     const r = await $.tool.call({ tool: 'Bash', command: 'ls' })
-    expect(r.deny).toMatch(/lists\[0\]\.terms\[1\] must be a string/)
-    expect(r.deny?.includes('Teotihuacan')).toBe(false)
+    expect(r.deny).toMatch(/paused because the user's topic-filter settings have a problem/)
+    expect(r.deny?.includes('lists[0]')).toBe(false)
+    expect(shown.statuses.at(-1)).toMatch(/BLOCKING tool calls\. lists\[0\]\.terms\[1\] must be a string/)
+    expect(shown.toasts).toHaveLength(1)
     expect(ran).toEqual([])
   })
 
@@ -173,5 +222,82 @@ describe('context', () => {
     on('prompt.attachment', async () => ({ text: 'Contents of notes.md: Teotihuacan' }))
     const r = await $.prompt.attachment({ type: 'file', text: 'x', origin: { kind: 'engine' } as never })
     expect(r.text?.includes('Teotihuacan')).toBe(false)
+  })
+})
+
+describe('packs', () => {
+  /** Runs one Bash call whose output is `output`, and returns what the model would read. */
+  async function seen($: Engine, on: On, output: string): Promise<string> {
+    on('tool.call', async () => ({ result: { stdout: output, stderr: '', interrupted: false }, text: output }))
+    const r = await $.tool.call({ tool: 'Bash', command: 'cat notes.md' })
+    return r.deny ?? (r.result as { stdout: string }).stdout
+  }
+
+  const usesPack = (list: Record<string, unknown>) => JSON.stringify({ lists: [{ pack: 'demo', ...list }] })
+
+  test('hides the terms of a built-in pack', async ($, on) => {
+    world(on, usesPack({}), { builtIn: { demo: pack(['Zorblax', 'Quindle']) } })
+    const out = await seen($, on, 'Zorblax met Quindle.')
+    expect(/Zorblax|Quindle/.test(out)).toBe(false)
+  })
+
+  test('your pack of the same name replaces the built-in one', async ($, on) => {
+    world(on, usesPack({}), { mine: { demo: pack(['Quindle']) }, builtIn: { demo: pack(['Zorblax']) } })
+    const out = await seen($, on, 'Zorblax met Quindle.')
+    expect(out.includes('Zorblax')).toBe(true)
+    expect(out.includes('Quindle')).toBe(false)
+  })
+
+  test('a list can leave terms out of its pack and add its own', async ($, on) => {
+    world(on, usesPack({ exclude: ['quindle'], terms: ['Vexmoor'] }), { builtIn: { demo: pack(['Zorblax', 'Quindle']) } })
+    const out = await seen($, on, 'Zorblax met Quindle in Vexmoor.')
+    expect(out.includes('Quindle')).toBe(true)
+    expect(/Zorblax|Vexmoor/.test(out)).toBe(false)
+  })
+
+  test('a missing pack pauses tool calls and tells the person which, with a guess', async ($, on) => {
+    const shown = world(on, JSON.stringify({ lists: [{ pack: 'paleontolgy' }] }), {
+      builtIn: { paleontology: pack(['Zorblax']), sports: pack(['Q1']) },
+    })
+    const out = await seen($, on, 'anything')
+    expect(out).toMatch(/paused because/)
+    expect(out.includes('paleont')).toBe(false)
+    expect(shown.statuses.at(-1)).toMatch(/BLOCKING tool calls\. Pack "paleontolgy" \(lists\[0\]\) was not found\. Run/)
+
+    await $.command.run({ command: 'topic-filter', args: '' } as never)
+    const problem = shown.logs.find(line => line.startsWith('Problem: '))
+    expect(problem).toMatch(/Did you mean "paleontology"\? Available: paleontology, sports\./)
+  })
+
+  test('/topic-filter shows where each list gets its terms, to the person only', async ($, on) => {
+    const shown = world(on, JSON.stringify({ lists: [{ name: 'dinos', pack: 'demo', terms: ['a1', 'b2'], exclude: ['x'] }] }), {
+      builtIn: { demo: pack(['Zorblax', 'Quindle']) },
+    })
+    tools(on)
+    await $.tool.call({ tool: 'Bash', command: 'ls' })
+    // The engine stamps origin and presentation; a test's call leaves them out.
+    const r = await $.command.run({ command: 'topic-filter', args: '' } as never)
+    expect(r.text).toBeUndefined()
+    expect(shown.logs).toContain('  "dinos": replace, pack demo (built-in, 2 terms), 2 own terms, 1 excluded')
+    expect(shown.logs.at(-1)).toBe('(Shown to you only; Claude does not see this.)')
+  })
+
+  test('/topic-filter packs lists every pack, what it covers, and which lists use it', async ($, on) => {
+    const shown = world(on, JSON.stringify({ lists: [{ name: 'mine-list', pack: 'demo' }, { name: 'gone', pack: 'nope' }] }), {
+      mine: { demo: pack(['Quindle']), mine: pack(['A1b', 'C2d'], ['h']) },
+      builtIn: {
+        demo: pack(['Zorblax']),
+        sports: JSON.stringify({ description: 'Leagues and teams.', terms: ['Q1', 'Q2', 'Q3'], hints: [] }),
+      },
+    })
+    const r = await $.command.run({ command: 'topic-filter', args: 'packs' } as never)
+    expect(r.text).toBeUndefined()
+    const text = shown.logs.join('\n')
+    expect(text).toMatch(/demo \(yours\): 1 term, 0 hints, used by "mine-list"/)
+    expect(text).toMatch(/mine \(yours\): 2 terms, 1 hint\n/)
+    expect(text).toMatch(/demo \(built-in\): replaced by yours/)
+    expect(text).toMatch(/sports \(built-in\): 3 terms, 0 hints\n {6}Leagues and teams\./)
+    expect(text).toMatch(/nope: NOT FOUND, named by "gone"/)
+    expect(/Quindle|Zorblax/.test(text)).toBe(false)
   })
 })

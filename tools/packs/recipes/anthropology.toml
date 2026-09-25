@@ -1,0 +1,152 @@
+# Ancient Mesoamerican, Andean and Egyptian sites and civilizations, plus the
+# vocabulary of anthropology and archaeology. Category names were found with
+# `topic-packs categories "<query>"`; they must match Wikipedia exactly.
+
+name = "anthropology"
+description = "Ancient Mesoamerican, Andean and Egyptian sites, civilizations, rulers and deities, and the vocabulary of anthropology and archaeology."
+
+# Seeds for Datamuse's "triggered by" words: loose associations, hints only.
+datamuse = ["archaeology", "anthropology", "egyptology", "ethnography", "excavation", "mesoamerica"]
+
+# Names the sources give only in other forms (plural page titles, adjectives).
+extra_terms = [
+  "Mesoamerican",
+  "Mixtec",
+  "Olmec",
+  "Toltec",
+  "Zapotec",
+  "Egyptologist",
+  "Pre-Columbian",
+]
+
+extra_hints = ["archaeologist", "anthropologist", "ethnographer", "ruins", "dig site"]
+
+exclude = []
+
+# Mesoamerica
+[[wikipedia]]
+category = "Maya sites"
+depth = 1
+
+[[wikipedia]]
+category = "Aztec sites"
+
+[[wikipedia]]
+category = "Olmec sites"
+
+[[wikipedia]]
+category = "Zapotec sites"
+
+[[wikipedia]]
+category = "Mesoamerican pyramids"
+
+[[wikipedia]]
+category = "Maya gods"
+
+[[wikipedia]]
+category = "Aztec gods"
+
+[[wikipedia]]
+category = "Aztec goddesses"
+
+[[wikipedia]]
+category = "Maya civilization"
+
+[[wikipedia]]
+category = "Aztec"
+
+[[wikipedia]]
+category = "Mesoamerican cultures"
+
+# Andes
+[[wikipedia]]
+category = "Inca sites"
+
+[[wikipedia]]
+category = "Inca Empire"
+
+[[wikipedia]]
+category = "Inca emperors"
+
+[[wikipedia]]
+category = "Inca gods"
+
+[[wikipedia]]
+category = "Moche sites"
+
+[[wikipedia]]
+category = "Moche culture"
+
+[[wikipedia]]
+category = "Nazca culture"
+
+[[wikipedia]]
+category = "Andean civilizations"
+
+[[wikipedia]]
+category = "Archaeological sites in Peru"
+depth = 1
+
+# Egypt
+[[wikipedia]]
+category = "Ancient Egyptian pyramids"
+
+[[wikipedia]]
+category = "Giza pyramid complex"
+
+[[wikipedia]]
+category = "Valley of the Kings"
+
+[[wikipedia]]
+category = "Egyptian temples"
+
+[[wikipedia]]
+category = "Cities in ancient Egypt"
+
+[[wikipedia]]
+category = "Egyptian gods"
+
+[[wikipedia]]
+category = "Egyptian goddesses"
+
+[[wikipedia]]
+category = "Pharaohs"
+depth = 1
+
+# Vocabulary
+[[wikipedia]]
+category = "Types of archaeological artefact"
+role = "hints"
+
+[[wikipedia]]
+category = "Archaeological terminology"
+role = "hints"
+
+[[wikipedia]]
+category = "Kinship terminology"
+role = "hints"
+
+[[wiktionary]]
+category = "en:Anthropology"
+
+[[wiktionary]]
+category = "en:Cultural anthropology"
+
+[[wiktionary]]
+category = "en:Ethnography"
+
+[[wiktionary]]
+category = "en:Archaeology"
+
+[[wiktionary]]
+category = "en:Ancient Egypt"
+
+[[wiktionary]]
+category = "en:Egyptian mythology"
+
+[[wiktionary]]
+category = "en:Egyptian deities"
+role = "terms"
+
+[[wiktionary]]
+category = "en:Aztec mythology"

@@ -55,8 +55,9 @@ then `/topic-filter reload` in a running session.
 
 **4. Restart Claude Code** once after installing: sessions that were already
 running do not load the plugin. The status line then shows
-`on, N terms, M hidden`, and `/topic-filter` shows what is hidden and where
-each part comes from (counts only, shown to you only).
+`on, N terms, M hidden`, `/topic-filter` shows what is set to be hidden and
+where each part comes from, and `/topic-filter log` shows what was actually
+hidden and where (both shown to you only).
 
 The [topics file](#the-topics-file) is optional. Use it for what the settings
 cannot express: drop-line or restore modes for your own words, several lists,
@@ -96,10 +97,28 @@ they drop out of every listing the model reads.
 
 Run `/topic-filter` in a session to see each list and where its terms come
 from, `/topic-filter packs` to see every topic pack and which lists use it,
-and `/topic-filter reload` after tagging repos. Both show counts, never terms,
-and are shown to you only: they name packs and lists, which would tell Claude
-what is being hidden. Edits to the topics file and packs are picked up on
-their own.
+and `/topic-filter reload` after tagging repos. Both show counts, never terms.
+Edits to the topics file and packs are picked up on their own.
+
+`/topic-filter log` shows what was hidden this session and where it came
+from: each source (a file read, a command, CLAUDE.md, your prompt) with the
+real terms, the placeholder each became, and how many lines each drop-line
+term removed. The dropped lines themselves are not shown.
+
+```
+Bash gh repo list
+    2 lines dropped by "repos tagged claude-hidden": secret-repo (x1), old-thesis (x1)
+Read D:
+otes	rip.md
+    Teotihuacan -> Marzipan (x3)
+```
+
+The log is kept in memory only, never written to disk (a file would be a
+second copy of what you are hiding), and ends with the session;
+`/topic-filter log clear` empties it sooner. Every `/topic-filter` output is
+shown to you only: it names packs, lists and terms, which would tell Claude
+what is being hidden. The status line's `M hidden` counts each hidden word and
+each dropped line, not distinct terms.
 
 ## The topics file
 

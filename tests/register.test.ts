@@ -324,3 +324,33 @@ describe('packs', () => {
     expect(/Quindle|Zorblax/.test(text)).toBe(false)
   })
 })
+
+describe('/topic-filter log', () => {
+  test('lists what was hidden and where, to the person only', async ($, on) => {
+    const shown = world(on)
+    tools(on)
+    on('prompt.section', async () => ({ text: 'Notes on Teotihuacan' }))
+    await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
+    await $.prompt.section({ name: 'memory', text: null })
+    await $.prompt.section({ name: 'memory', text: null })
+
+    const r = await $.command.run({ command: 'topic-filter', args: 'log' } as never)
+    expect(r.text).toBeUndefined()
+    const text = shown.logs.join('\n')
+    expect(text).toMatch(/ {2}Bash gh repo list\n {6}Teotihuacan -> [A-Z][a-z]+\d* \(x1\)\n {6}1 line dropped by "repos": secret-repo \(x1\)/)
+    // Filtered twice, listed once.
+    expect(text).toMatch(/ {2}System prompt section memory\n {6}Teotihuacan -> \S+ \(x1\)\n/)
+    expect(text.includes('Hidden\tprivate')).toBe(false)
+    expect(shown.logs.at(-1)).toBe('(Shown to you only; Claude does not see this.)')
+  })
+
+  test('log clear empties it', async ($, on) => {
+    const shown = world(on)
+    tools(on)
+    await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
+    await $.command.run({ command: 'topic-filter', args: 'log clear' } as never)
+    shown.logs.length = 0
+    await $.command.run({ command: 'topic-filter', args: 'log' } as never)
+    expect(shown.logs[0]).toBe('Nothing has been hidden this session yet.')
+  })
+})

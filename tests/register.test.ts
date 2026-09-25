@@ -1,4 +1,4 @@
-import type { On } from 'claude-code'
+import type { On, RenderElement } from 'claude-code'
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 
 import type { Summary } from '../hooks/log.ts'
@@ -70,7 +70,8 @@ function world(on: On, topics: string | null = TOPICS, packs: Packs = {}, stored
   // What the person sees, which never reaches the model.
   const shown = { statuses: [] as string[], logs: [] as string[], toasts: [] as string[] }
   on('ui.status', ($, e) => {
-    if (e.text !== undefined) shown.statuses.push(e.text)
+    // A cleared status line is recorded as '', so a test sees it go.
+    shown.statuses.push(e.text ?? '')
     return { value: undefined }
   })
   on('ui.log', ($, e) => {
@@ -363,7 +364,8 @@ describe('/topic-filter log', () => {
     expect(text).toMatch(/ {2}C:\/work\/CLAUDE\.md\n {6}Teotihuacan -> \S+ \(x1\)/)
     expect(text.includes('Context block claudeMd')).toBe(false)
     expect(text).toMatch(/ {2}Attachment \(file\)\n {6}Teotihuacan -> \S+ \(x1\)/)
-    expect(shown.statuses.at(-1)).toMatch(/, 3 hidden/)
+    // All is well, so the warning-styled status line stays clear.
+    expect(shown.statuses.at(-1)).toBe('')
   })
 
   test('log clear empties it', async ($, on) => {
@@ -423,6 +425,29 @@ async function textOf(ui: { findAll: (q: { type: string }) => Promise<{ text: st
 }
 
 const SURFACES = ['terminal', 'desktop'] as const
+
+describe('footer label', () => {
+  for (const surface of SURFACES) {
+    test(`all well, the count is a dim footer mode; paused, the status line says so (${surface})`, async ($, on) => {
+      const shown = world(on)
+      tools(on)
+      // Beneath the plugin, the engine's own footer: the modes joined.
+      on('ui.render', { component: 'SessionMode' }, async ($, e) => {
+        const { Text } = await $.ui.resolve(e)
+        return h(Text, {}, e.props.modes.join(' & ')) as RenderElement
+      })
+      await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
+      const ui = await $.ui.mount({ plugin: 'topic-filter', surface, component: 'SessionMode', requestId: 'modes', props: { modes: ['focus'] } })
+      expect(await textOf(ui)).toEqual(['focus & topic-filter: 2 hidden'])
+      expect(shown.statuses.at(-1)).toBe('')
+
+      await $.command.run(typed('off'))
+      await ui.redraw()
+      expect(await textOf(ui)).toEqual(['focus'])
+      expect(shown.statuses.at(-1)).toMatch(/^PAUSED/)
+    })
+  }
+})
 
 describe('subagents', () => {
   test("a subagent's tool output is filtered, and a placeholder there is refused", async ($, on) => {
@@ -665,7 +690,7 @@ describe('pause', () => {
   test('pause and stop are off too, and resume and start are on', async ($, on) => {
     const shown = world(on)
     tools(on)
-    for (const [arg, status] of [['pause', /^PAUSED/], ['resume', /^on, /], ['stop', /^PAUSED/], ['start', /^on, /]] as const) {
+    for (const [arg, status] of [['pause', /^PAUSED/], ['resume', /^$/], ['stop', /^PAUSED/], ['start', /^$/]] as const) {
       await $.command.run(typed(arg))
       expect(shown.statuses.at(-1)).toMatch(status)
     }

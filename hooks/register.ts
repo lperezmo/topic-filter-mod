@@ -507,9 +507,33 @@ function statusText(): string {
   return githubProblem === undefined ? base : `${base} (${githubProblem})`
 }
 
+/** Whether all is well: filtering, with nothing for the person to fix or know. */
+function isQuiet(): boolean {
+  return (
+    loaded !== undefined &&
+    loaded.filter !== null &&
+    loaded.error === undefined &&
+    githubProblem === undefined &&
+    !paused
+  )
+}
+
+/**
+ * The dim label topic-filter adds to the prompt footer's modes while all is
+ * well, or undefined while the status line speaks for it.
+ */
+function modeLabel(): string | undefined {
+  return isQuiet() ? `topic-filter: ${hiddenCount} hidden` : undefined
+}
+
+/**
+ * Pins the status line only when something needs the person's attention (the
+ * engine draws it as a warning); all being well, the footer label says it.
+ */
 function showStatus($: EngineInterface): void {
   // The status line already names the plugin.
-  $.ui.status(statusText().replace(/^topic-filter: /, ''))
+  $.ui.status(isQuiet() ? undefined : statusText().replace(/^topic-filter: /, ''))
+  $.ui.invalidate('ui.render')
 }
 
 /**
@@ -528,11 +552,10 @@ function counted(
 ): void {
   hiddenLog.record(source, tally, mode, key, agent, kind)
   // A pass that hid nothing changes the log only by removing an entry.
-  if (tally.hits.size > 0 || mode !== 'add') $.ui.invalidate('ui.render')
   const n = tally.replaced + tally.dropped
-  if (n === 0) return
   hiddenCount += n
-  showStatus($)
+  if (n > 0) showStatus($)
+  else if (tally.hits.size > 0 || mode !== 'add') $.ui.invalidate('ui.render')
 }
 
 /** The overview `/topic-filter` shows the person: every list and where its terms come from. */
@@ -806,6 +829,12 @@ export function register(on: On, options: PluginOptions) {
     const { ref: _ref, ...rest } = r
     return { ...rest, text: text.value }
   }).catch(() => ({ text: 'topic-filter failed while checking this output, so it is withheld.' }))
+
+  // The footer's dim mode labels: the hidden count while all is well.
+  on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
+    const label = modeLabel()
+    return label === undefined ? next(e) : next({ ...e, props: { ...e.props, modes: [...e.props.modes, label] } })
+  })
 
   // The sidebar: the whole session, or the subagent whose transcript is in view.
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {

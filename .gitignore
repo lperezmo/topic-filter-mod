@@ -224,3 +224,4 @@ __marimo__/
 .claude/types/
 .claude/settings.local.json
 node_modules/
+tools/packs/.cache/

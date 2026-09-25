@@ -114,7 +114,7 @@ describe('the log', () => {
     const log = new HiddenLog()
     for (let i = 0; i < 205; i++) log.record(`Read ${i}.md`, pass('Teotihuacan'))
     const lines = log.lines()
-    expect(lines.slice(0, 2)).toEqual(['Hidden as it came in (most recent last):', '  (5 older sources not shown)'])
+    expect(lines.slice(0, 2)).toEqual(['(5 older sources not shown)', 'Hidden as it came in (most recent last):'])
     expect(lines.includes('  Read 4.md')).toBe(false)
     expect(lines.includes('  Read 5.md')).toBe(true)
     log.clear()

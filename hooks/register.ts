@@ -17,11 +17,12 @@
 // Every hook fails closed: when filtering throws or overruns, what it was
 // filtering is withheld, never passed through.
 
-import type { EngineInterface, FsEntry, On, PluginOptions, ToolCallResult } from 'claude-code'
+import type { AgentInfo, EngineInterface, FsEntry, On, PluginOptions, ToolCallResult } from 'claude-code'
 
 import { closestName, ConfigError, optionLists, parseConfig, parsePack, SLUG, type Config, type Pack } from './config.ts'
 import { HiddenLog, type LogMode } from './log.ts'
 import { fnv1a } from './placeholders.ts'
+import { SIDEBAR_ID, sidebarView } from './sidebar.tsx'
 import { Filter, forEachString, newTally, noteFor, type Tally } from './redact.ts'
 
 const COMMAND = 'topic-filter'
@@ -90,6 +91,49 @@ let hiddenCount = 0
 
 /** What was hidden and where, for `/topic-filter log`: memory only, shown to the person only. */
 const hiddenLog = new HiddenLog()
+
+/** Whether this module has matched the sidebar to its setting yet: once per load, as a /config change reloads it. */
+let sidebarSynced = false
+
+/**
+ * Opens the sidebar when its setting is on, and closes it when the setting
+ * was just turned off. The setting's last value is kept in the store, so a
+ * pane the person opened with `/topic-filter sidebar` is left alone.
+ */
+async function syncSidebar($: EngineInterface): Promise<void> {
+  if (sidebarSynced) return
+  sidebarSynced = true
+  try {
+    const isOn = pluginOptions.showSidebar === true
+    const was = await $.store.get('sidebar')
+    if (isOn) await $.ui.open({ id: SIDEBAR_ID, title: 'topic-filter' })
+    else if (was === true) await $.ui.close({ id: SIDEBAR_ID })
+    if (was !== isOn) await $.store.set('sidebar', isOn)
+  } catch {
+    // The filter works without its sidebar; the next call tries again.
+    sidebarSynced = false
+  }
+}
+
+/** A subagent as the log and the sidebar name it. */
+const agentLabel = (info: AgentInfo) => info.name ?? (info.description.trim() === '' ? info.type : info.description)
+
+/** Every subagent's label by id; empty when they cannot be listed. */
+async function agentLabels($: EngineInterface): Promise<Map<string, string>> {
+  try {
+    return new Map((await $.agent.list()).map(info => [info.id, agentLabel(info)]))
+  } catch {
+    return new Map()
+  }
+}
+
+/** Subagent labels the sidebar has looked up, so a redraw lists the agents only for one it has not seen. */
+const sidebarLabels = new Map<string, string>()
+
+async function sidebarLabel($: EngineInterface, agentId: string): Promise<string> {
+  if (!sidebarLabels.has(agentId)) for (const [id, name] of await agentLabels($)) sidebarLabels.set(id, name)
+  return sidebarLabels.get(agentId) ?? agentId
+}
 
 /** The input fields that say what a tool call was about, in order of preference. */
 const SOURCE_KEYS = ['file_path', 'notebook_path', 'command', 'url', 'pattern', 'query', 'path', 'description']
@@ -299,6 +343,7 @@ async function saltOf($: EngineInterface): Promise<string> {
 
 /** The filter for the topics file as it is now, read again only when it changed. */
 async function current($: EngineInterface): Promise<Loaded> {
+  await syncSidebar($)
   if (loaded !== undefined && Date.now() - checkedAt < RECHECK_MS) return loaded
 
   // The key covers the topics file, the repositories found by topic, and
@@ -427,9 +472,14 @@ function showStatus($: EngineInterface): void {
   $.ui.status(statusText().replace(/^topic-filter: /, ''))
 }
 
-/** Counts a pass for the status line and logs it under `source` (see HiddenLog.record for `mode` and `key`). */
-function counted($: EngineInterface, tally: Tally, source: string, mode: LogMode = 'add', key?: string): void {
-  hiddenLog.record(source, tally, mode, key)
+/**
+ * Counts a pass for the status line, logs it under `source` (see
+ * HiddenLog.record for `mode`, `key` and `agent`), and redraws the sidebar.
+ */
+function counted($: EngineInterface, tally: Tally, source: string, mode: LogMode = 'add', key?: string, agent?: string): void {
+  hiddenLog.record(source, tally, mode, key, agent)
+  // A pass that hid nothing changes the log only by removing an entry.
+  if (tally.hits.size > 0 || mode !== 'add') $.ui.invalidate('ui.render')
   const n = tally.replaced + tally.dropped
   if (n === 0) return
   hiddenCount += n
@@ -459,7 +509,8 @@ function describe(l: Loaded): string[] {
     })
     if ((l.filter?.skippedTerms ?? 0) > 0) lines.push(`${l.filter?.skippedTerms} terms were too short to use.`)
   }
-  lines.push('Run /topic-filter packs to see every pack, and /topic-filter log to see what was hidden and where.')
+  lines.push('Run /topic-filter packs to see every pack, /topic-filter log to see what was hidden and where,')
+  lines.push('and /topic-filter sidebar to watch it in a pane as it happens.')
   return lines
 }
 
@@ -472,8 +523,8 @@ export function register(on: On, options: PluginOptions) {
       await $.command.register({
         name: COMMAND,
         description:
-          'Show what topic-filter is set to hide; `log` lists what was hidden and where; `packs` lists topic packs; `reload` re-reads everything',
-        argumentHint: '[reload|packs|log|log clear]',
+          'Show what topic-filter is set to hide; `log` lists what was hidden and where; `sidebar` shows or hides it in a pane; `packs` lists topic packs; `reload` re-reads everything',
+        argumentHint: '[reload|packs|log|log clear|sidebar]',
       })
     } catch {
       // The filter works without its command.
@@ -538,7 +589,7 @@ export function register(on: On, options: PluginOptions) {
     const result = await next(call)
     const seen = newTally()
     const filtered = filterResult(f, result, seen)
-    counted($, seen, toolSource(e.tool, input))
+    counted($, seen, toolSource(e.tool, input), 'add', undefined, e.agentId)
     if (e.tool === 'Read' && typeof e.file_path === 'string' && hidesContent(f, seen)) {
       filteredFiles.add(pathKey(e.file_path))
     }
@@ -608,7 +659,7 @@ export function register(on: On, options: PluginOptions) {
     const text = f.text(r.text, tally)
     // An attachment has no name of its own; its text tells one from another,
     // so one asked again (after a reload) replaces its entry.
-    counted($, tally, `Attachment (${e.type})`, 'replace', `attachment:${e.type}:${fnv1a(r.text)}`)
+    counted($, tally, `Attachment (${e.type})`, 'replace', `attachment:${e.type}:${fnv1a(r.text)}`, e.agentId)
     if (!text.changed) return r
     return { text: text.vanished ? null : text.value }
   }).catch(() => ({ text: null }))
@@ -636,7 +687,7 @@ export function register(on: On, options: PluginOptions) {
     if (f === null) return next(e)
     const tally = newTally()
     const text = f.text(e.text, tally, false)
-    counted($, tally, 'Message delivered to the session')
+    counted($, tally, 'Message delivered to the session', 'add', undefined, e.agentId)
     return next(text.changed ? { ...e, text: text.value } : e)
   }).catch(($, e, next) =>
     next.called ? undefined : { consumed: 'topic-filter failed while checking this delivery.' },
@@ -656,16 +707,22 @@ export function register(on: On, options: PluginOptions) {
       }
       // Shown to the person only: `ui.log` lines never reach the model, and
       // these name packs and lists, which would say what is being hidden.
-      if (arg === 'log clear') hiddenLog.clear()
+      if (arg === 'log clear') {
+        hiddenLog.clear()
+        $.ui.invalidate('ui.render')
+      }
       const l = await current($)
+      const labels = arg === 'log' ? await agentLabels($) : new Map<string, string>()
       const lines =
         arg === 'packs'
           ? await packListing($, l)
           : arg === 'log'
-            ? hiddenLog.lines()
+            ? hiddenLog.lines(agent => labels.get(agent) ?? agent)
             : arg === 'log clear'
               ? ['The log is cleared, except what Claude reads with every request. The status line count keeps its total.']
-              : describe(l)
+              : arg === 'sidebar'
+                ? await toggleSidebar($)
+                : describe(l)
       for (const line of [...lines, '(Shown to you only; Claude does not see this.)']) $.ui.log(line)
       return {}
     }
@@ -680,6 +737,33 @@ export function register(on: On, options: PluginOptions) {
     const { ref: _ref, ...rest } = r
     return { ...rest, text: text.value }
   }).catch(() => ({ text: 'topic-filter failed while checking this output, so it is withheld.' }))
+
+  // The sidebar: the whole session, or the subagent whose transcript is in view.
+  on('ui.render', { component: 'Pane' }, async ($, e, next) => {
+    if (e.requestId !== SIDEBAR_ID) return next(e)
+    const { Box, Text } = await $.ui.resolve(e)
+    const agentId = e.props.view.agentId
+    const agent = agentId === undefined ? undefined : await sidebarLabel($, agentId)
+    return sidebarView(
+      { Box, Text },
+      { summary: hiddenLog.summary(agentId), ...(agent === undefined ? {} : { agent }), countsOnly: pluginOptions.sidebarCountsOnly === true },
+    )
+  })
+}
+
+/** Opens the sidebar, or closes it when it is open; says which, for the person. */
+async function toggleSidebar($: EngineInterface): Promise<string[]> {
+  const isOpen = (await $.ui.panes()).some(pane => pane.id === SIDEBAR_ID)
+  if (isOpen) {
+    await $.ui.close({ id: SIDEBAR_ID })
+    return ['Sidebar closed. /topic-filter sidebar opens it again.']
+  }
+  const opened = await $.ui.open({ id: SIDEBAR_ID, title: 'topic-filter' })
+  if (!opened.isPlaced) return [`Sidebar opened, but it waits undrawn: ${opened.reason}`]
+  return [
+    'Sidebar open. With other panes open it is one of their tabs: click a tab to switch;',
+    'ctrl+x x or its close mark closes it. The "Sidebar" switch in /config opens it at every start.',
+  ]
 }
 
 /**

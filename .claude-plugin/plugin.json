@@ -1,6 +1,6 @@
 {
   "name": "topic-filter",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Hide chosen topics from Claude: listed terms become stable placeholder names (or their lines are dropped) in tool output, prompts, CLAUDE.md, memory and skills before the model reads them.",
   "author": {
     "name": "Luis Perez Morales",
@@ -66,6 +66,18 @@
       "title": "Other packs",
       "description": "Comma-separated names of your own packs (the packs folder under ~/.claude/topic-filter). /topic-filter packs lists them.",
       "default": ""
+    },
+    "showSidebar": {
+      "type": "boolean",
+      "title": "Sidebar",
+      "description": "Open a pane at every start that shows what was hidden as it happens, with the real words (shown to you only). /topic-filter sidebar opens or closes it any time. Easiest in /config (Enter flips it); on the /plugin screen, type true or false.",
+      "default": false
+    },
+    "sidebarCountsOnly": {
+      "type": "boolean",
+      "title": "Sidebar: counts only",
+      "description": "The sidebar shows counts by list and never a word, placeholder or file name. For screen sharing and recordings. Easiest in /config (Enter flips it); on the /plugin screen, type true or false.",
+      "default": false
     },
     "extraWords": {
       "type": "string",

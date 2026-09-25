@@ -1,0 +1,29 @@
+# Genetic disorders and the vocabulary of genetics. Category names were
+# found with `topic-packs categories "<query>"`; they must match Wikipedia
+# exactly.
+
+name = "genetics"
+description = "Genetic disorders and syndromes, and the vocabulary of genetics and heredity."
+
+datamuse = ["genetics", "heredity", "chromosome", "mutation"]
+
+extra_terms = []
+extra_hints = []
+
+# Judge would make these terms despite many dry-run hits in ordinary code.
+exclude = ["epistasis", "epistatic", "biallelic"]
+
+[[wikipedia]]
+category = "Genetic disorders by inheritance"
+depth = 1
+
+[[wikipedia]]
+category = "Genetic disorders by mechanism"
+depth = 1
+
+[[wikipedia]]
+category = "Genetics terminology"
+role = "hints"
+
+[[wiktionary]]
+category = "en:Genetics"

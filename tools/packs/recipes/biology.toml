@@ -1,0 +1,27 @@
+# Molecular biology techniques and anatomical terminology, plus the
+# vocabulary of biology. Category names were found with
+# `topic-packs categories "<query>"`; they must match Wikipedia exactly.
+
+name = "biology"
+description = "Molecular biology techniques, cellular processes and anatomical terminology, and the vocabulary of biology."
+
+datamuse = ["biology", "organism", "physiology", "taxonomy"]
+
+extra_terms = []
+extra_hints = []
+
+exclude = []
+
+[[wikipedia]]
+category = "Molecular biology techniques"
+
+[[wikipedia]]
+category = "Anatomical terminology"
+
+[[wikipedia]]
+category = "Cellular processes"
+role = "hints"
+
+[[wikipedia]]
+category = "Biology terminology"
+role = "hints"

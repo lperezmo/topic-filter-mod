@@ -1,0 +1,41 @@
+# Named malware, computer worms and hacker groups, plus the vocabulary of
+# computer security. Category names were found with
+# `topic-packs categories "<query>"`; they must match Wikipedia exactly.
+
+name = "cybersecurity"
+description = "Named malware, computer worms and hacker groups, and the vocabulary of computer security and cryptography."
+
+datamuse = ["malware", "exploit", "breach", "intrusion"]
+
+extra_terms = []
+extra_hints = []
+
+# Generic security/crypto vocabulary or judge terms with many dry-run hits
+# in ordinary code.
+exclude = [
+  "Attack vector",
+  "cleartext",
+  "Diffie-Hellman",
+  "ECDSA",
+  "Ed25519",
+  "keypair",
+  "keyspace",
+  "Malware",
+  "pubkey",
+  "Twofish",
+]
+
+[[wikipedia]]
+category = "Malware"
+
+[[wikipedia]]
+category = "Computer worms"
+
+[[wikipedia]]
+category = "Hacker groups"
+
+[[wiktionary]]
+category = "en:Computer security"
+
+[[wiktionary]]
+category = "en:Cryptography"

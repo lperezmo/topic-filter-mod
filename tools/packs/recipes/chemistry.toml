@@ -1,0 +1,29 @@
+# Chemical elements, named reactions and functional groups, plus the
+# vocabulary of chemistry. Category names were found with
+# `topic-packs categories "<query>"`; they must match Wikipedia exactly.
+
+name = "chemistry"
+description = "Chemical elements, named reactions, functional groups and laboratory equipment, and the vocabulary of chemistry."
+
+datamuse = ["chemistry", "chemical", "reagent", "catalyst"]
+
+extra_terms = []
+extra_hints = []
+
+exclude = []
+
+[[wikipedia]]
+category = "Chemical elements"
+
+[[wikipedia]]
+category = "Name reactions"
+
+[[wikipedia]]
+category = "Functional groups"
+
+[[wikipedia]]
+category = "Laboratory glassware"
+role = "hints"
+
+[[wiktionary]]
+category = "en:Chemical elements"

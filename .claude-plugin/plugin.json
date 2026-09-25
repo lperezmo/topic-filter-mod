@@ -1,0 +1,21 @@
+{
+  "name": "topic-filter",
+  "version": "0.1.0",
+  "description": "Hide chosen topics from Claude: listed terms become stable placeholder names (or their lines are dropped) in tool output, prompts, CLAUDE.md, memory and skills before the model reads them.",
+  "author": {
+    "name": "Luis Perez Morales",
+    "url": "https://github.com/lperezmo"
+  },
+  "homepage": "https://github.com/lperezmo/topic-filter-mod",
+  "repository": "https://github.com/lperezmo/topic-filter-mod",
+  "license": "GPL-3.0-only",
+  "keywords": ["mod", "function-hooks", "privacy", "redaction", "pseudonymization"],
+  "userConfig": {
+    "configPath": {
+      "type": "string",
+      "title": "Topics file",
+      "description": "Path to topics.json. Empty means ~/.claude/topic-filter/topics.json.",
+      "default": ""
+    }
+  }
+}

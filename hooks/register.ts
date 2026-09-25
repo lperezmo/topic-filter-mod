@@ -20,9 +20,9 @@
 import type { AgentInfo, EngineInterface, FsEntry, On, PluginOptions, ToolCallResult } from 'claude-code'
 
 import { closestName, ConfigError, optionLists, parseConfig, parsePack, SLUG, type Config, type Pack } from './config.ts'
-import { HiddenLog, type LogMode } from './log.ts'
+import { HiddenLog, type LogMode, type SourceKind } from './log.ts'
 import { fnv1a } from './placeholders.ts'
-import { SIDEBAR_ID, sidebarView } from './sidebar.tsx'
+import { openRows, SIDEBAR_ID, sidebarView, type Depth, type SidebarView } from './sidebar.tsx'
 import { Filter, forEachString, newTally, noteFor, type Tally } from './redact.ts'
 
 const COMMAND = 'topic-filter'
@@ -146,6 +146,16 @@ const sidebarLabels = new Map<string, string>()
 async function sidebarLabel($: EngineInterface, agentId: string): Promise<string> {
   if (!sidebarLabels.has(agentId)) for (const [id, name] of await agentLabels($)) sidebarLabels.set(id, name)
   return sidebarLabels.get(agentId) ?? agentId
+}
+
+/** Which kind of source a tool's output is, for the sidebar's bars. */
+function kindOfTool(tool: string): SourceKind {
+  if (['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'NotebookRead'].includes(tool)) return 'files'
+  if (['Bash', 'PowerShell', 'BashOutput', 'Monitor', 'KillShell'].includes(tool)) return 'commands'
+  if (['WebFetch', 'WebSearch'].includes(tool)) return 'web'
+  if (['Grep', 'Glob', 'LS', 'ToolSearch'].includes(tool)) return 'searches'
+  if (tool === 'Skill') return 'skills'
+  return 'tools'
 }
 
 /** The input fields that say what a tool call was about, in order of preference. */
@@ -503,11 +513,20 @@ function showStatus($: EngineInterface): void {
 }
 
 /**
- * Counts a pass for the status line, logs it under `source` (see
- * HiddenLog.record for `mode`, `key` and `agent`), and redraws the sidebar.
+ * Counts a pass for the status line, logs it under `source` as a `kind` of
+ * source (see HiddenLog.record for `mode`, `key` and `agent`), and redraws
+ * the sidebar.
  */
-function counted($: EngineInterface, tally: Tally, source: string, mode: LogMode = 'add', key?: string, agent?: string): void {
-  hiddenLog.record(source, tally, mode, key, agent)
+function counted(
+  $: EngineInterface,
+  tally: Tally,
+  source: string,
+  kind: SourceKind,
+  mode: LogMode = 'add',
+  key?: string,
+  agent?: string,
+): void {
+  hiddenLog.record(source, tally, mode, key, agent, kind)
   // A pass that hid nothing changes the log only by removing an entry.
   if (tally.hits.size > 0 || mode !== 'add') $.ui.invalidate('ui.render')
   const n = tally.replaced + tally.dropped
@@ -634,7 +653,7 @@ export function register(on: On, options: PluginOptions) {
     }
     const seen = newTally()
     const filtered = filterResult(f, result, seen)
-    counted($, seen, toolSource(e.tool, input), 'add', undefined, e.agentId)
+    counted($, seen, toolSource(e.tool, input), kindOfTool(e.tool), 'add', undefined, e.agentId)
     if (e.tool === 'Read' && typeof e.file_path === 'string' && hidesContent(f, seen)) {
       filteredFiles.add(pathKey(e.file_path))
     }
@@ -654,7 +673,7 @@ export function register(on: On, options: PluginOptions) {
     const context = e.context?.map(c => f.text(c, tally).value).filter(c => c.length > 0)
     if (tally.replaced === 0 && tally.dropped === 0) return next(e)
 
-    counted($, tally, 'Your prompt')
+    counted($, tally, 'Your prompt', 'prompts')
     const note = f.informModel ? noteFor(tally, f.restorable) : undefined
     return next({ ...e, text: text.value, context: note === undefined ? context : [...(context ?? []), note] })
   }).catch(($, e, next) =>
@@ -672,13 +691,13 @@ export function register(on: On, options: PluginOptions) {
     const blocks = r.blocks.map(b => {
       const tally = newTally()
       const text = f.text(b.text, tally).value
-      if (!(byFile && b.name === 'claudeMd')) counted($, tally, `Context block ${b.name}`, 'standing')
+      if (!(byFile && b.name === 'claudeMd')) counted($, tally, `Context block ${b.name}`, 'context', 'standing')
       return { ...b, text }
     })
     const instructionFiles = r.instructionFiles?.map(file => {
       const tally = newTally()
       const content = f.text(file.content, tally).value
-      counted($, tally, file.path, 'standing')
+      counted($, tally, file.path, 'context', 'standing')
       return { ...file, content }
     })
     return instructionFiles === undefined ? { blocks } : { blocks, instructionFiles }
@@ -691,7 +710,7 @@ export function register(on: On, options: PluginOptions) {
     const tally = newTally()
     // A section left out now clears its entry: an empty tally does that.
     const text = r.text === null ? null : f.text(r.text, tally)
-    counted($, tally, `System prompt section ${e.name}`, 'standing')
+    counted($, tally, `System prompt section ${e.name}`, 'context', 'standing')
     if (text === null) return r
     return text.changed ? { text: text.value } : r
   }).catch(() => ({ text: null }))
@@ -704,7 +723,7 @@ export function register(on: On, options: PluginOptions) {
     const text = f.text(r.text, tally)
     // An attachment has no name of its own; its text tells one from another,
     // so one asked again (after a reload) replaces its entry.
-    counted($, tally, `Attachment (${e.type})`, 'replace', `attachment:${e.type}:${fnv1a(r.text)}`, e.agentId)
+    counted($, tally, `Attachment (${e.type})`, 'context', 'replace', `attachment:${e.type}:${fnv1a(r.text)}`, e.agentId)
     if (!text.changed) return r
     return { text: text.vanished ? null : text.value }
   }).catch(() => ({ text: null }))
@@ -715,7 +734,7 @@ export function register(on: On, options: PluginOptions) {
     if (f === null) return r
     const tally = newTally()
     const text = f.text(r.text, tally)
-    counted($, tally, `Skill ${e.skill}`)
+    counted($, tally, `Skill ${e.skill}`, 'skills')
     return text.changed ? { text: text.value } : r
   }).catch(() => ({ text: 'topic-filter failed while checking this skill, so its text is withheld.' }))
 
@@ -732,7 +751,7 @@ export function register(on: On, options: PluginOptions) {
     if (f === null) return next(e)
     const tally = newTally()
     const text = f.text(e.text, tally, false)
-    counted($, tally, 'Message delivered to the session', 'add', undefined, e.agentId)
+    counted($, tally, 'Message delivered to the session', 'prompts', 'add', undefined, e.agentId)
     return next(text.changed ? { ...e, text: text.value } : e)
   }).catch(($, e, next) =>
     next.called ? undefined : { consumed: 'topic-filter failed while checking this delivery.' },
@@ -783,7 +802,7 @@ export function register(on: On, options: PluginOptions) {
     const tally = newTally()
     const text = f.text(r.text, tally)
     if (!text.changed) return r
-    counted($, tally, `/${e.command} output`)
+    counted($, tally, `/${e.command} output`, 'commands')
     const { ref: _ref, ...rest } = r
     return { ...rest, text: text.value }
   }).catch(() => ({ text: 'topic-filter failed while checking this output, so it is withheld.' }))
@@ -791,19 +810,57 @@ export function register(on: On, options: PluginOptions) {
   // The sidebar: the whole session, or the subagent whose transcript is in view.
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
     if (e.requestId !== SIDEBAR_ID) return next(e)
-    const { Box, Text } = await $.ui.resolve(e)
+    const { Box, Text, Button } = await $.ui.resolve(e)
     const agentId = e.props.view.agentId
     const agent = agentId === undefined ? undefined : await sidebarLabel($, agentId)
+    sidebarAgent = agentId
     return sidebarView(
-      { Box, Text },
+      { Box, Text, Button },
       {
         summary: hiddenLog.summary(agentId),
         ...(agent === undefined ? {} : { agent }),
         countsOnly: pluginOptions.sidebarCountsOnly === true,
         isPaused: paused,
+        view: sidebarState,
+        columns: e.props.bodyColumns,
+        rows: e.props.scroll.bodyRows,
+        onPress: pressSidebar,
       },
     )
   })
+
+  // A press ran its button's handler, which changed the view: draw it again.
+  on('ui.press', async ($, e, next) => {
+    const r = await next(e)
+    if (e.requestId === SIDEBAR_ID) $.ui.invalidate('ui.render')
+    return r
+  })
+}
+
+/**
+ * What the person picked in the sidebar: memory only, like the log, so a
+ * reload opens it fresh. One view for every scope it is drawn in.
+ */
+let sidebarState: SidebarView = { tab: 'lists', open: new Set() }
+
+/** The subagent the sidebar was last drawn for, which a row press refers to. */
+let sidebarAgent: string | undefined
+
+/** A sidebar button's press: `tab:<tab>`, `depth:<0-2>` or `row:<id>`. */
+function pressSidebar(key: string): void {
+  const [kind, ...rest] = key.split(':')
+  const arg = rest.join(':')
+  if (kind === 'tab' && (arg === 'lists' || arg === 'feed')) {
+    sidebarState = { ...sidebarState, tab: arg }
+  } else if (kind === 'depth' && (arg === '0' || arg === '1' || arg === '2')) {
+    sidebarState = { ...sidebarState, depth: Number(arg) as Depth, open: new Set() }
+  } else if (kind === 'row') {
+    // From a depth to rows picked one by one: start from what shows now.
+    const open = openRows(sidebarState, hiddenLog.summary(sidebarAgent))
+    if (open.has(arg)) open.delete(arg)
+    else open.add(arg)
+    sidebarState = { ...sidebarState, depth: null, open }
+  }
 }
 
 const PAUSE_ARGS = new Set(['off', 'pause', 'stop'])

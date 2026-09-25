@@ -143,12 +143,37 @@ heading.
 ### The sidebar
 
 `/topic-filter sidebar` opens a pane that shows what has been hidden so far
-and updates as it happens: each list, the terms it hid with their
-placeholders, the lines each term dropped, and where the latest hit came
-from. From 30 distinct terms on, it counts by list instead
-(`pack chemistry: 42 words (17 terms)`), and `/topic-filter log` still names
-each one. Open a subagent's transcript from the tasks list and the sidebar
-shows only what that subagent read.
+and updates as it happens.
+
+```
+ 38  hidden this session
+31 words replaced, 7 lines dropped
+
+1: Lists  2: Feed                  whole session
+Expand ● none ─────── ○ lists ─────── ○ all
+▾ pack astronomy           ▮▮▮▮▮▮▮▮   9 words
+  ▸ Nibiru          -> Toboggan             x6
+▸ repos tagged claude-hidden ▮▮▮▮     4 lines
+
+Where it came from               last hit 14:02
+Files       ████████████████████████████    12
+Commands    ██████████████░░░░░░░░░░░░░░     6
+9 terms  6 lists  14 sources  1 subagent
+```
+
+- **Lists** is a tree: each list with a bar for its share, then its terms and
+  the placeholder each became, then the files and commands each term was
+  hidden in. Click a row (or reach it with ctrl+x tab, then Tab, and press
+  Enter) to open or close it. **Expand** opens the whole tree to one depth:
+  lists only, their terms, or everything. From 30 distinct terms on, it starts
+  at lists only.
+- **Feed** is each hit as it happened, newest first: when, what Claude was
+  reading, and which terms it hid there.
+- **Where it came from** sums hits by the kind of source: files, prompts,
+  web pages, commands, searches, skills, and context such as CLAUDE.md.
+
+Open a subagent's transcript from the tasks list and the sidebar shows only
+what that subagent read.
 
 - **Where it shows.** In the fullscreen layout it docks beside the transcript;
   otherwise it opens above the prompt. Opened by the setting rather than the
@@ -160,7 +185,8 @@ shows only what that subagent read.
 - **Every start.** The **Sidebar** switch in `/config` opens it at every
   start. Turning the switch off closes it.
 - **Screen sharing.** It shows the real words. **Sidebar: counts only** keeps
-  it to counts by list, with no words, placeholders or file names.
+  it to counts by list, with no words, placeholders or file names, in the tree
+  and the feed alike.
 
 The sidebar is drawn on your screen only and never reaches Claude.
 

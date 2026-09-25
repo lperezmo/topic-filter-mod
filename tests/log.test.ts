@@ -128,3 +128,60 @@ describe('the log', () => {
     expect(long.endsWith('...')).toBe(true)
   })
 })
+
+describe('what the sidebar reads', () => {
+  test('the feed has each new pass, newest first, with its time', () => {
+    let now = 1000
+    const log = new HiddenLog(() => now)
+    log.record('Bash gh repo list', pass('a/secret-repo\n'), 'add', undefined, undefined, 'commands')
+    now = 2000
+    log.record('Read trip.md', pass('Teotihuacan and Teotihuacan'), 'add', undefined, undefined, 'files')
+    const { feed, lastAt } = log.summary()
+    expect(feed.map(item => [item.at, item.label, item.replaced, item.dropped])).toEqual([
+      [2000, 'Read trip.md', 2, 0],
+      [1000, 'Bash gh repo list', 0, 1],
+    ])
+    expect(feed[0]!.hits).toEqual([{ list: 'places', term: 'Teotihuacan', n: 2 }])
+    expect(lastAt).toBe(2000)
+  })
+
+  test('text that stands in every request joins the feed once, and keeps its time', () => {
+    let now = 1000
+    const log = new HiddenLog(() => now)
+    log.record('CLAUDE.md', pass('Teotihuacan'), 'standing', undefined, undefined, 'context')
+    now = 5000
+    log.record('CLAUDE.md', pass('Teotihuacan'), 'standing', undefined, undefined, 'context')
+    const { feed, lastAt } = log.summary()
+    expect(feed).toHaveLength(1)
+    expect(lastAt).toBe(1000)
+  })
+
+  test('each kind of source is summed, and each term names its sources, most first', () => {
+    const log = new HiddenLog(() => 0)
+    log.record('Read trip.md', pass('Teotihuacan Teotihuacan'), 'add', undefined, undefined, 'files')
+    log.record('Your prompt', pass('Teotihuacan'), 'add', undefined, undefined, 'prompts')
+    log.record('Bash ls', pass('a/secret-repo\n'), 'add', undefined, undefined, 'commands')
+    const s = log.summary()
+    expect(s.kinds).toEqual([
+      { kind: 'files', n: 2 },
+      { kind: 'prompts', n: 1 },
+      { kind: 'commands', n: 1 },
+    ])
+    expect(s.sources).toBe(3)
+    const place = s.lists.find(list => list.list === 'places')!.hits[0]!
+    expect(place.sources).toEqual([
+      { label: 'Read trip.md', n: 2 },
+      { label: 'Your prompt', n: 1 },
+    ])
+  })
+
+  test("a subagent's feed holds only its own passes, and clear empties the feed", () => {
+    const log = new HiddenLog(() => 0)
+    log.record('Bash ls', pass('a/secret-repo\n'))
+    log.record('Read plan.md', pass('Teotihuacan'), 'add', undefined, 'agent-7', 'files')
+    expect(log.summary('agent-7').feed.map(item => item.label)).toEqual(['Read plan.md'])
+    expect(log.summary().feed).toHaveLength(2)
+    log.clear()
+    expect(log.summary().feed).toEqual([])
+  })
+})

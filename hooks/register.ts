@@ -398,7 +398,7 @@ const firstSentence = (text: string) => /^.*?[.?!](?=\s|$)/.exec(text)?.[0] ?? t
 /** The status line: UI only, never sent to the model, so it may name packs and problems. */
 function statusText(): string {
   if (loaded === undefined || (loaded.filter === null && loaded.error === undefined)) {
-    return 'topic-filter: off, nothing chosen to hide. Choose packs and words in /plugin.'
+    return 'topic-filter: off, nothing chosen to hide. Switch on packs in /config.'
   }
   if (loaded.filter === null) return `topic-filter: BLOCKING tool calls. ${firstSentence(loaded.error ?? '')} Run /topic-filter.`
   const base = `topic-filter: on, ${count(loaded.filter.termCount, 'term')}, ${hiddenCount} hidden`
@@ -422,7 +422,7 @@ function counted($: EngineInterface, tally: Tally): void {
 function describe(l: Loaded): string[] {
   const lines = [statusText().replace(/^topic-filter: /, 'topic-filter is '), `Topics file: ${l.path}`]
   if (l.latest !== null && l.latest.lists.every(list => list.setting !== undefined)) {
-    lines.push('(No topics file: everything below comes from the plugin settings in /plugin.)')
+    lines.push('(No topics file: everything below comes from the plugin settings in /config.)')
   }
   if (l.error !== undefined) lines.push(`Problem: ${l.error}`)
   if (l.latest !== null) {

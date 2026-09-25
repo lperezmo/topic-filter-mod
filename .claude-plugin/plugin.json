@@ -1,6 +1,6 @@
 {
   "name": "topic-filter",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Hide chosen topics from Claude: listed terms become stable placeholder names (or their lines are dropped) in tool output, prompts, CLAUDE.md, memory and skills before the model reads them.",
   "author": {
     "name": "Luis Perez Morales",
@@ -14,7 +14,9 @@
     "function-hooks",
     "privacy",
     "redaction",
-    "pseudonymization"
+    "pseudonymization",
+    "productivity",
+    "github"
   ],
   "userConfig": {
     "hideTagged": {

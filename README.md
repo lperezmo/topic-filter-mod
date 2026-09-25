@@ -157,23 +157,8 @@ heading.
 ### The sidebar
 
 `/topic-filter sidebar` opens a pane that shows what has been hidden so far
-and updates as it happens.
-
-```
- 38  hidden this session
-31 words replaced, 7 lines dropped
-
-1: Lists  2: Feed                  whole session
-Expand ● none ─────── ○ lists ─────── ○ all
-▾ pack astronomy           ▮▮▮▮▮▮▮▮   9 words
-  ▸ Nibiru          -> Toboggan             x6
-▸ repos tagged claude-hidden ▮▮▮▮     4 lines
-
-Where it came from               last hit 14:02
-Files       ████████████████████████████    12
-Commands    ██████████████░░░░░░░░░░░░░░     6
-9 terms  6 lists  14 sources  1 subagent
-```
+and updates as it happens. It is the right-hand pane in
+[the screenshot at the top](#topic-filter-mod).
 
 - **Lists** is a tree: each list with a bar for its share, then its terms and
   the placeholder each became, then the files and commands each term was

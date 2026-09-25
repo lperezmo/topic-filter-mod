@@ -27,6 +27,9 @@ claude plugin install topic-filter@topic-filter-mod
 Or from inside Claude Code: `/plugin marketplace add lperezmo/topic-filter-mod`,
 then `/plugin install topic-filter@topic-filter-mod`.
 
+If the installer says `1 userConfig option not yet set`, you can ignore it:
+that option (`configPath`) is optional, and empty means the default path below.
+
 **3. Say what to hide** in `~/.claude/topic-filter/topics.json`. A built-in
 [topic pack](#topic-packs), your own words, or both:
 
@@ -34,8 +37,13 @@ then `/plugin install topic-filter@topic-filter-mod`.
 { "lists": [{ "name": "science", "pack": "chemistry", "terms": ["my-secret-project"] }] }
 ```
 
-**4. Start a new session.** The status line shows
-`topic-filter: on, N terms, M hidden`.
+Create the `topic-filter` folder inside `.claude` in your home folder, and
+write the file with any editor (Notepad is fine). Do it yourself rather than
+asking Claude: the file holds the words you are hiding.
+
+**4. Restart Claude Code.** Sessions that were already running do not load
+the plugin. In a new session the status line shows `on, N terms, M hidden`,
+and `/topic-filter` shows your lists.
 
 Built-in packs: `anthropology`, `biology`, `chemistry`, `cybersecurity`,
 `genetics`. A fuller example with every option is in
@@ -44,6 +52,28 @@ topics file elsewhere, set the plugin's `configPath` option in `/config`.
 
 > Built and tested against Claude Code 2.1.282. The function hooks API may
 > change between releases.
+
+## Update
+
+Claude Code does not update plugins from third-party marketplaces on its own
+unless you turn that on. Pick one:
+
+- **Automatic (recommended).** Once, in Claude Code: `/plugin`, then
+  Marketplaces, then `topic-filter-mod`, then enable auto-update. New versions
+  install when Claude Code starts.
+- **By hand**, whenever you want the latest:
+
+  ```
+  claude plugin marketplace update topic-filter-mod
+  claude plugin update topic-filter@topic-filter-mod
+  ```
+
+Either way, restart Claude Code afterwards; running sessions keep the old
+version. `claude plugin list` shows the version you have. Updates never touch
+your topics file or your own packs in `~/.claude/topic-filter/`.
+
+To remove it: `claude plugin uninstall topic-filter@topic-filter-mod`. Your
+topics file stays until you delete it.
 
 ## Using it
 

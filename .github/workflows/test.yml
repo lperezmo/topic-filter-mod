@@ -1,0 +1,67 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # Weekly, so a new Claude Code release that breaks the mod shows up on its own.
+  schedule:
+    - cron: "0 14 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  mod:
+    name: mod (Claude Code ${{ matrix.claude }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        # 2.1.277 is the oldest release with the prompt.attachment event the
+        # mod registers; earlier ones refuse to load it.
+        claude: ["2.1.277", "2.1.280", "latest"]
+        include:
+          - os: windows-latest
+            claude: latest
+    env:
+      DISABLE_AUTOUPDATER: "1"
+      # Mods are early access; without this `plugin test` refuses to run.
+      CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      # The native installer from the quickstart, pinned to the matrix version.
+      - name: Install Claude Code ${{ matrix.claude }} (Linux)
+        if: runner.os != 'Windows'
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash -s ${{ matrix.claude }}
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install Claude Code ${{ matrix.claude }} (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & ([scriptblock]::Create((irm https://claude.ai/install.ps1))) ${{ matrix.claude }}
+          Join-Path $env:USERPROFILE '.local/bin' | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - run: claude --version
+      - name: Validate manifests
+        run: |
+          claude plugin validate .claude-plugin/plugin.json
+          claude plugin validate .claude-plugin/marketplace.json
+      - name: Plugin tests
+        run: claude plugin test .
+
+  packs:
+    name: pack builder
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/packs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/ruff-action@v3
+        with:
+          src: tools/packs
+      - run: uv run pytest -q

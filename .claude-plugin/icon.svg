@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>topic-filter</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1a2233"/>
+      <stop offset="1" stop-color="#0b0f19"/>
+    </linearGradient>
+    <linearGradient id="swap" gradientUnits="userSpaceOnUse" x1="214" y1="0" x2="300" y2="0">
+      <stop offset="0" stop-color="#f472b6"/>
+      <stop offset="1" stop-color="#2ee6c5"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <g transform="translate(-8 8)">
+    <!-- what you used to do: a benzene ring -->
+    <g fill="none" stroke="#f472b6" stroke-width="16" stroke-linejoin="round">
+      <polygon points="126,176 188,212 188,284 126,320 64,284 64,212"/>
+      <circle cx="126" cy="248" r="38" stroke-width="11"/>
+    </g>
+    <!-- swapped for -->
+    <g fill="none" stroke="url(#swap)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M220 224 H290"/>
+      <path d="M270 204 L292 224 L270 244"/>
+      <path d="M292 272 H222"/>
+      <path d="M242 252 L220 272 L242 292"/>
+    </g>
+    <!-- what you do now: code -->
+    <g fill="none" stroke="#2ee6c5" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M372 170 C344 170 344 186 344 206 V228 C344 240 336 248 322 248 C336 248 344 256 344 268 V290 C344 310 344 326 372 326"/>
+      <path d="M414 170 C442 170 442 186 442 206 V228 C442 240 450 248 464 248 C450 248 442 256 442 268 V290 C442 310 442 326 414 326"/>
+    </g>
+  </g>
+</svg>

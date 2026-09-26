@@ -1,7 +1,7 @@
 {
   "name": "topic-filter",
-  "version": "0.5.2",
-  "description": "Hide chosen topics from Claude: listed terms become stable placeholder names (or their lines are dropped) in tool output, prompts, CLAUDE.md, memory and skills before the model reads them.",
+  "version": "0.6.0",
+  "description": "Keep unrelated topics from pulling Claude off your code: listed terms become stable placeholder names (or their lines are dropped) in tool output, prompts, CLAUDE.md, memory and skills before the model reads them.",
   "author": {
     "name": "Luis Perez Morales",
     "url": "https://github.com/lperezmo"
@@ -15,22 +15,9 @@
     "privacy",
     "redaction",
     "pseudonymization",
-    "productivity",
-    "github"
+    "productivity"
   ],
   "userConfig": {
-    "hideTagged": {
-      "type": "boolean",
-      "title": "Hide repos tagged on GitHub",
-      "description": "Your repositories with one of the GitHub topics below drop out of everything Claude reads. Tag one with: gh repo edit OWNER/REPO --add-topic claude-hidden, then run /topic-filter reload. Easiest in /config (Enter flips it); on the /plugin screen, type true or false.",
-      "default": true
-    },
-    "githubTopics": {
-      "type": "string",
-      "title": "GitHub topics",
-      "description": "Comma-separated topics that mark a repository as hidden.",
-      "default": "claude-hidden"
-    },
     "hideAnthropology": {
       "type": "boolean",
       "title": "Hide anthropology",

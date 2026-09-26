@@ -1,10 +1,21 @@
+<p align="center">
+  <img src=".claude-plugin/icon.svg" alt="topic-filter logo: a benzene ring swapped for code braces" width="200">
+</p>
+
 # topic-filter-mod
-Keep chosen topics, repos and names out of Claude Code's context. Nothing on disk changes.
+Code with Claude without your past life tagging along. Chosen topics become neutral placeholders before Claude reads them; nothing on disk changes.
+
+Your machine carries everything you have ever worked on: a career in
+chemistry, a thesis, old side projects, a client's name. None of it has
+anything to do with the bug you are fixing today, but Claude reads it anyway,
+in file names, notes, memory and command output, and unrelated material pulls
+a session sideways. You should be free to work on the code in front of you
+without explaining your history first.
 
 `topic-filter` is a [Claude Mod](https://github.com/anthropics/claude-code/tree/main/mods)
-(a Claude Code plugin built on function hooks) that hides chosen topics from
-the model. Before the model reads anything, each listed term becomes a stable
-placeholder (`Teotihuacan` becomes `Teacup`), or the lines that mention it
+(a Claude Code plugin built on function hooks) that keeps chosen topics out of
+the way. Before the model reads anything, each listed term becomes a stable
+placeholder (`Teotihuacan` becomes `Teacup7`), or the lines that mention it
 disappear. Your repos, notes and memory stay as they are.
 
 ![A Claude Code session summarizing a demo project: its reply uses codenames in place of the hidden terms, while the sidebar lists each hidden term, its codename, and where the hits came from](images/live_filter.png)
@@ -36,12 +47,10 @@ then `/plugin install topic-filter@topic-filter-mod`.
 **3. Choose what to hide.** Run `/config` and type `topic-filter` to find the
 plugin's rows. Enter or Space flips a switch or edits a field:
 
-![The /config screen listing topic-filter's rows: GitHub tag hiding, one switch per built-in pack, other packs, the sidebar switches and the topics file](images/hide_config.png)
+![The /config screen listing topic-filter's rows: one switch per built-in pack, other packs, the sidebar switches and the topics file](images/hide_config.png)
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| Hide repos tagged on GitHub | on | Your repos with a topic below drop out of everything Claude reads |
-| GitHub topics | `claude-hidden` | Comma-separated topics that mark a repo as hidden |
 | Hide anthropology, biology, chemistry, cybersecurity, genetics | off | One switch per [built-in pack](#topic-packs) |
 | Other packs | empty | Names of [your own packs](#topic-packs), comma-separated |
 | Sidebar | off | Opens [the sidebar](#the-sidebar) at every start |
@@ -55,13 +64,8 @@ shows every setting as a text box; there, a switch takes the word `true` or
 `false` (a `y` is saved as false).
 
 What you type in either place goes to the plugin, never into the
-conversation. A change applies right away, no restart needed. To hide a repo:
-
-```
-gh repo edit OWNER/REPO --add-topic claude-hidden
-```
-
-then `/topic-filter reload` in a running session.
+conversation. A change applies right away, no restart needed. To hide a repo,
+see [Hiding repositories](#hiding-repositories-without-deleting-them).
 
 **4. Restart Claude Code** once after installing: sessions that were already
 running do not load the plugin. The prompt footer then shows a dim
@@ -102,8 +106,8 @@ topics file stays until you delete it.
 ## Using it
 
 The motivating case: `gh repo list` shows repositories a session has no reason
-to see. [Tag them on GitHub](#hiding-repositories-without-deleting-them), and
-they drop out of every listing the model reads.
+to see. [List their names](#hiding-repositories-without-deleting-them) in a
+`drop-line` list, and they drop out of every listing the model reads.
 
 Run `/topic-filter` in a session to see each list and where its terms come
 from, `/topic-filter packs` to see every topic pack and which lists use it,
@@ -123,7 +127,7 @@ Hidden in what Claude reads with every request (system prompt, CLAUDE.md):
       Teotihuacan -> Marzipan (x1)
 Hidden as it came in (most recent last):
   Bash gh repo list
-      2 lines dropped by "repos tagged claude-hidden": secret-repo (x1), old-thesis (x1)
+      2 lines dropped by "hidden-repos": secret-repo (x1), old-thesis (x1)
   Read C:/notes/trip.md
       Teotihuacan -> Marzipan (x3)
 ```
@@ -146,9 +150,10 @@ not distinct terms. The footer label is drawn on the terminal and in the
 desktop app.
 
 topic-filter pins a status line under the prompt (which Claude Code draws as a
-warning) only when something needs you: it is paused, nothing is switched on,
-the settings have a problem, or a GitHub topic lookup failed. While all is
-well there is no status line, only the dim label.
+warning) only when something needs you: nothing is switched on, or the
+settings have a problem. While all is well there is no status line, only the
+dim label, and while you have paused it the label reads
+`topic-filter: paused`.
 
 What a subagent reads is filtered the same way, and its placeholders are
 refused in its tool calls too. The log lists each subagent under its own
@@ -193,7 +198,7 @@ The sidebar is drawn on your screen only and never reaches Claude.
 
 `/topic-filter off` (or `pause`, `stop`) pauses filtering for the session:
 tool output reaches Claude whole and placeholders are no longer refused, so
-Claude can act on something hidden, such as deleting a tagged repo.
+Claude can act on something hidden, such as deleting a hidden repo.
 `/topic-filter on` (or `resume`, `start`) turns it back on and says how many
 lists and terms it resumed with.
 
@@ -203,8 +208,8 @@ lists and terms it resumed with.
   filter on. Anything may turn it back on.
 - **It never outlasts the session.** The pause is kept in memory only: a
   restart, `/clear` or a reload of the plugin turns filtering back on.
-- **You can see it.** A status line reads `PAUSED` in place of the footer count,
-  and the sidebar says so at the top.
+- **You can see it.** The footer label reads `topic-filter: paused` in place of
+  the count, and the sidebar says so at the top.
 - **Claude is told.** Pausing and resuming each leave Claude a one-line note,
   so it knows whether placeholders will be refused.
 - **Two guards stay on.** The topics file is still out of reach, since reading
@@ -221,7 +226,7 @@ What Claude read before the pause keeps its placeholders.
   "placeholder": "codename",
   "informModel": true,
   "lists": [
-    { "name": "hidden-repos", "mode": "drop-line", "githubTopic": "claude-hidden", "terms": ["my-private-experiment"] },
+    { "name": "hidden-repos", "mode": "drop-line", "terms": ["my-private-experiment", "old-client-work"] },
     { "name": "anthropology", "terms": ["Teotihuacan", "Chichen Itza", "Maya", "Pyramids of Giza"] },
     { "name": "email-contacts", "restore": true, "terms": ["Ada Lovelace"] }
   ]
@@ -230,16 +235,15 @@ What Claude read before the pause keeps its placeholders.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `placeholder` | `codename` | `codename` gives each term a capitalized word (`Bubblegum`, `Kazoo2`). `tag` gives `[hidden-3fa2c1]`. |
+| `placeholder` | `codename` | `codename` gives each term a capitalized word and a number (`Bubblegum7`, `Kazoo12`); the number keeps it from ever matching a word you really write. `tag` gives `[hidden-3fa2c1]`. |
 | `informModel` | `true` | Tell the model that placeholders exist and how to treat them. Without it the model tends to treat `Bubblegum` as a real name and go looking for it. |
 | `lists[].name` | `list N` | A label for you. It never reaches the model. |
 | `lists[].terms` | `[]` | The terms to hide. |
 | `lists[].mode` | `replace` | `replace` swaps each term for its placeholder. `drop-line` removes every line that mentions a term; in JSON (`gh ... --json`, MCP results) the whole array item goes. A typed prompt always gets placeholders, never lost lines. |
 | `lists[].match` | `word` | `word` matches whole words only. `substring` matches inside words too (`maya` in `Mayapan`). |
 | `lists[].restore` | `false` | When the model uses this list's placeholder in a tool call, write the real term back instead of refusing. For drafting text that must contain real names the model should not read. |
-| `lists[].githubTopic` | none | At session start, every repository of yours tagged with this GitHub topic joins the list (`gh repo list --topic`). The last good answer is used if `gh` fails. |
 | `lists[].pack` | none | A [topic pack](#topic-packs) whose terms join the list. |
-| `lists[].exclude` | `[]` | Terms to leave out of the list, whatever brought them in (a pack, a GitHub topic, `terms`). Matched the same forgiving way as terms. |
+| `lists[].exclude` | `[]` | Terms to leave out of the list, whatever brought them in (a pack or `terms`). Matched the same forgiving way as terms. |
 
 Matching ignores case and accents (`Teotihuacán` = `teotihuacan`), treats
 spaces, hyphens and underscores as one separator (`secret repo` also finds
@@ -305,15 +309,24 @@ effect on the next tool call, no restart needed.
 
 ### Hiding repositories without deleting them
 
-```
-gh repo edit lperezmo/some-repo --add-topic claude-hidden
+Put the repository names in a list whose `mode` is `drop-line`, in the topics
+file or in Extra words to hide (a `replace` list, so those get placeholders
+instead):
+
+```json
+{ "name": "hidden-repos", "mode": "drop-line", "terms": ["some-repo", "another-repo"] }
 ```
 
-With a list whose `githubTopic` is `claude-hidden` and `mode` is `drop-line`,
-that repository vanishes from `gh repo list`, `gh api` JSON, GitHub MCP
-results, paths, file contents and memory. Remove the topic to bring it back.
-The lookup runs through the mod itself, so the list of hidden names never
-enters the transcript.
+Each one vanishes from `gh repo list`, `gh api` JSON, GitHub MCP results,
+paths, file contents and memory. Take the name out to bring it back. The
+topics file is guarded, so the list of hidden names never enters the
+transcript.
+
+Versions before 0.6.0 could also find repositories by GitHub topic
+(`githubTopic`, and the Hide repos tagged on GitHub setting). That lookup ran
+`gh` with your GitHub login, so it is gone: a topics file that still has
+`githubTopic` stops tool calls until you list those repositories in `terms`,
+and the old settings are ignored.
 
 ## What it covers
 
@@ -368,7 +381,7 @@ Read these before relying on it.
   from a filtered read loses the hidden lines. Only `Write` is refused.
 - **Sessions from before the mod was on** already hold the raw terms.
 - **Other plugins** that hook `tool.call` beneath this one see raw results.
-- **Your settings are readable.** The pack switches and GitHub topics you set
+- **Your settings are readable.** The pack switches and pack names you set
   in `/plugin` are stored in `~/.claude/settings.json`, which Claude can read,
   so they show which topics you hide (the extra words are in secure storage).
   Only the topics file is guarded.
@@ -386,9 +399,6 @@ Read these before relying on it.
   problem, such as a pack name that does not exist, and tool calls pause until
   it is fixed so nothing leaks. `/topic-filter` shows the reason and suggests
   the closest pack name.
-- **A tagged repo still shows up.** Run `/topic-filter reload`: tagged repos are
-  looked up when a session starts. If the status line mentions `gh could not
-  list topic`, check `gh auth status`.
 - **A switch set in `/plugin` did not take.** That screen needs the word
   `true`; anything else is saved as false. `/config` has real switches.
 - **Claude says a command was refused because of a placeholder.** That is the
@@ -427,8 +437,7 @@ you typed.
 
 ## Roadmap
 
-- More built-in packs, and a larger codename word list so big packs get fewer
-  numbered placeholders (`Teacup14`).
+- More built-in packs.
 - An optional classifier for text that is about a topic without using a
   listed word (a local GLiNER server, or Jev), withholding whole chunks.
 - Show you the real names in the transcript view while the model sees

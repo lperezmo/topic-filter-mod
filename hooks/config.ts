@@ -13,11 +13,9 @@ export type ListConfig = {
   /** Put the real term back when the model uses this list's placeholder in a tool call. */
   restore: boolean
   terms: string[]
-  /** A GitHub repository topic whose repositories join `terms` at session start. */
-  githubTopic?: string
   /** A topic pack whose terms join `terms`: the user's own file first, else the built-in one. */
   pack?: string
-  /** Terms left out of this list, whatever brought them in (the pack, the GitHub topic, `terms`). */
+  /** Terms left out of this list, whatever brought them in (the pack or `terms`). */
   exclude: string[]
   /** The plugin option this list came from; absent for the topics file's own lists. */
   setting?: string
@@ -71,9 +69,10 @@ function parseList(list: unknown, i: number): ListConfig {
   const at = `lists[${i}]`
   if (!isRecord(list)) throw new ConfigError(`${at} must be an object`)
 
-  const githubTopic = list.githubTopic
-  if (githubTopic !== undefined && (typeof githubTopic !== 'string' || !SLUG.test(githubTopic))) {
-    throw new ConfigError(`${at}.githubTopic must be a GitHub topic (lowercase letters, digits, hyphens)`)
+  // Removed in 0.6.0. Refusing it, rather than skipping it, keeps repositories
+  // someone relied on hiding from reaching the model unnoticed.
+  if (list.githubTopic !== undefined) {
+    throw new ConfigError(`${at}.githubTopic is no longer supported: list the repository names in ${at}.terms instead.`)
   }
 
   const pack = list.pack
@@ -87,13 +86,12 @@ function parseList(list: unknown, i: number): ListConfig {
     match: oneOf(list.match, ['word', 'substring'] as const, 'word', `${at}.match`),
     restore: flag(list.restore, false, `${at}.restore`),
     terms: strings(list.terms, `${at}.terms`),
-    githubTopic,
     pack,
     exclude: strings(list.exclude, `${at}.exclude`),
   }
 }
 
-/** A GitHub topic or pack name: also safe as a file name, never a path. */
+/** A pack name: also safe as a file name, never a path. */
 export const SLUG = /^[a-z0-9][a-z0-9-]*$/
 
 /** The built-in packs' switches in the plugin's settings, by option key. */
@@ -120,8 +118,7 @@ function slugs(value: unknown, setting: string, what: string): string[] {
 
 /**
  * The lists the plugin's own settings (`/plugin configure`, `/config`) add to
- * the topics file's: repositories by GitHub topic, dropped by line; switched-on
- * packs; and extra words. The topics file is then only needed for more than
+ * the topics file's: switched-on packs and extra words. The topics file is then only needed for more than
  * this.
  */
 export function optionLists(options: Readonly<Record<string, unknown>>): ListConfig[] {
@@ -134,12 +131,6 @@ export function optionLists(options: Readonly<Record<string, unknown>>): ListCon
     ...over,
   })
   const lists: ListConfig[] = []
-
-  if (options.hideTagged !== false) {
-    for (const topic of slugs(options.githubTopics ?? 'claude-hidden', 'GitHub topics', 'GitHub topic')) {
-      lists.push(list({ name: `repos tagged ${topic}`, setting: 'GitHub topics', mode: 'drop-line', githubTopic: topic }))
-    }
-  }
 
   const packs = new Map<string, string>()
   for (const [key, pack] of Object.entries(PACK_OPTIONS)) {

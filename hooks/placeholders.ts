@@ -61,11 +61,13 @@ function codenameFor(
 ): string {
   const n = CODENAMES.length
   const first = hash % n
+  // Always numbered, so a name is never a word people really write: a plain
+  // one would make every real mention of that word read as a hidden item.
+  const digit = 2 + (Math.floor(hash / n) % 8)
 
   for (let c = 0; ; c += 1) {
     const round = Math.floor((first + c) / n)
-    const word = CODENAMES[(first + c) % n]!
-    const name = round === 0 ? word : `${word}${round + 1}`
+    const name = `${CODENAMES[(first + c) % n]!}${round * 10 + digit}`
     const lower = name.toLowerCase()
     if (taken.has(name) || avoid.equal.has(lower) || avoid.contain.some(t => lower.includes(t))) continue
     taken.add(name)

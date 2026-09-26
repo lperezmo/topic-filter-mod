@@ -5,8 +5,7 @@
     {
       "name": "hidden-repos",
       "mode": "drop-line",
-      "githubTopic": "claude-hidden",
-      "terms": ["my-private-experiment"]
+      "terms": ["my-private-experiment", "old-client-work"]
     },
     {
       "name": "anthropology",

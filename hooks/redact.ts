@@ -83,14 +83,12 @@ export class Filter {
   /**
    * @param config the parsed topics file
    * @param salt this machine's salt for placeholder names
-   * @param extraTerms more terms per list index (repositories found by topic), matched as the list says
    * @param packTerms a pack's terms per list index, always matched as whole words: thousands of
    *   terms matched inside words would hide text everywhere
    */
   constructor(
     config: Config,
     salt: string,
-    extraTerms: ReadonlyMap<number, readonly string[]> = new Map(),
     packTerms: ReadonlyMap<number, readonly string[]> = new Map(),
   ) {
     this.informModel = config.informModel
@@ -101,7 +99,7 @@ export class Filter {
     config.lists.forEach((list, i) => {
       const excluded = new Set(list.exclude.map(foldTerm))
       const sources: [readonly string[], boolean][] = [
-        [[...list.terms, ...(extraTerms.get(i) ?? [])], list.match === 'word'],
+        [list.terms, list.match === 'word'],
         [packTerms.get(i) ?? [], true],
       ]
       for (const [terms, isWordOnly] of sources) {

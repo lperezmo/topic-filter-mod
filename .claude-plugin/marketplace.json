@@ -6,13 +6,13 @@
     "url": "https://github.com/lperezmo"
   },
   "metadata": {
-    "description": "topic-filter: a Claude Code mod that hides chosen topics from the model behind placeholder names."
+    "description": "topic-filter: a Claude Code mod that keeps unrelated topics out of the way, behind placeholder names."
   },
   "plugins": [
     {
       "name": "topic-filter",
       "source": "./",
-      "description": "Hide chosen topics from Claude: listed terms become stable placeholder names (or their lines are dropped) before the model reads them.",
+      "description": "Keep unrelated topics from pulling Claude off your code: listed terms become stable placeholder names (or their lines are dropped) before the model reads them.",
       "category": "security"
     }
   ]

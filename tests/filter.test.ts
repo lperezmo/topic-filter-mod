@@ -67,12 +67,12 @@ describe('placeholders', () => {
     expect(a.get('teotihuacan')).toBe(b.get('teotihuacan'))
   })
 
-  test('names are distinct and never a listed term', () => {
+  test('names are distinct, and always numbered so none is a word people really write', () => {
     const terms = Array.from({ length: 600 }, (_, i) => `term${i}`)
-    const names = assignPlaceholders(terms, 'codename', 'salt', { equal: new Set(['bubblegum']), contain: [] })
+    const names = assignPlaceholders(terms, 'codename', 'salt', { equal: new Set(), contain: [] })
     const values = [...names.values()]
     expect(new Set(values).size).toBe(600)
-    expect(values.includes('Bubblegum')).toBe(false)
+    for (const name of values) expect(name).toMatch(/^[A-Z][a-z]+\d+$/)
   })
 
   test('tags look like [hidden-xxxxxx]', () => {
@@ -80,10 +80,10 @@ describe('placeholders', () => {
     expect(names.get('giza')).toMatch(/^\[hidden-[0-9a-f]{6}\]$/)
   })
 
-  test('finds a placeholder in written text, plural included, not its lower-case word', () => {
-    const known = new Set(['Bubblegum', 'Kazoo2'])
-    const hits = findPlaceholders('cd Bubblegums && ls Kazoo2 bubblegum', known)
-    expect(hits.map(h => [h.name, h.suffix])).toEqual([['Bubblegum', 's'], ['Kazoo2', '']])
+  test('finds a placeholder in written text, plural included, not its plain or lower-case word', () => {
+    const known = new Set(['Bubblegum7', 'Kazoo12'])
+    const hits = findPlaceholders('cd Bubblegum7s && ls Kazoo12 bubblegum7, a Bubblegum and a Kazoo', known)
+    expect(hits.map(h => [h.name, h.suffix])).toEqual([['Bubblegum7', 's'], ['Kazoo12', '']])
   })
 })
 
@@ -120,25 +120,20 @@ describe('config and packs', () => {
 
   test("a pack's terms match whole words even in a substring list", () => {
     const config = parseConfig(JSON.stringify({ lists: [{ match: 'substring', terms: ['maya'] }] }))
-    const f = new Filter(config, 'salt-0123456789abcdef', new Map(), new Map([[0, ['giza']]]))
+    const f = new Filter(config, 'salt-0123456789abcdef', new Map([[0, ['giza']]]))
     const tally = newTally()
     f.text('Mayapan and Gizamatic, then Giza', tally)
     expect(tally.replaced).toBe(2)
   })
 
-  test('the plugin settings add lists: tagged repos by default, switched-on packs, extra words', () => {
-    expect(optionLists({}).map(l => [l.name, l.mode, l.githubTopic])).toEqual([['repos tagged claude-hidden', 'drop-line', 'claude-hidden']])
+  test('the plugin settings add lists: switched-on packs, extra words', () => {
     const lists = optionLists({
-      hideTagged: true,
-      githubTopics: 'claude-hidden, Private-Lab',
       hideChemistry: true,
       hideBiology: false,
       otherPacks: 'my-topic, chemistry',
       extraWords: ' Teotihuacan ,, Giza ',
     })
     expect(lists.map(l => l.name)).toEqual([
-      'repos tagged claude-hidden',
-      'repos tagged private-lab',
       'pack chemistry',
       'pack my-topic',
       'extra words',
@@ -147,8 +142,9 @@ describe('config and packs', () => {
     expect(lists.find(l => l.pack === 'my-topic')!.setting).toBe('Other packs')
   })
 
-  test('tagged repos can be switched off, and nothing chosen adds nothing', () => {
-    expect(optionLists({ hideTagged: false })).toEqual([])
+  test('nothing chosen adds nothing, and the removed GitHub topic settings are ignored', () => {
+    expect(optionLists({})).toEqual([])
+    expect(optionLists({ hideTagged: true, githubTopics: 'claude-hidden' })).toEqual([])
   })
 
   test('a bad name in a setting names the setting and position, never the value', () => {

@@ -54,7 +54,7 @@ const MODEL_FACING_TOOLS = new Set([
 /** The context block that tells the model placeholders exist; stable, so the prompt cache holds. */
 const EXPLAINER =
   "Some names in this session may be placeholders written by the user's topic-filter mod: capitalized " +
-  'codenames such as Bubblegum or Kazoo2, or tags such as [hidden-3fa2c1]. Each stands for an item the ' +
+  'numbered codenames such as Bubblegum7 or Kazoo12, or tags such as [hidden-3fa2c1]. Each stands for an item the ' +
   'user has hidden from this session, and lines about some hidden items are removed entirely. Treat a ' +
   'placeholder as an opaque name and do not guess what it stands for. Mentioning placeholders in replies ' +
   'is fine. A tool call (command, search, file edit) that uses one is refused, unless the note on the ' +
@@ -80,11 +80,6 @@ type Loaded = {
 let loaded: Loaded | undefined
 let loading: { key: string; promise: Promise<Loaded> } | undefined
 let checkedAt = 0
-
-/** Repositories found by GitHub topic, per list index, and a key that changes with them. */
-let githubTerms = new Map<number, string[]>()
-let githubKey = ''
-let githubProblem: string | undefined
 
 /** Items hidden since the session started, for the status line. */
 let hiddenCount = 0
@@ -369,12 +364,11 @@ async function current($: EngineInterface): Promise<Loaded> {
   await syncSidebar($)
   if (loaded !== undefined && Date.now() - checkedAt < RECHECK_MS) return loaded
 
-  // The key covers the topics file, the repositories found by topic, and
-  // every pack file the last build read, so editing any of them is seen.
+  // The key covers the topics file and every pack file the last build read, so editing any of them is seen.
   const path = await pathOf($)
   const topicsKey = await statKey($, path)
   const deps = loaded?.path === path ? loaded.deps : []
-  const key = [topicsKey, githubKey, ...(await Promise.all(deps.map(d => statKey($, d))))].join('\n')
+  const key = [topicsKey, ...(await Promise.all(deps.map(d => statKey($, d))))].join('\n')
   checkedAt = Date.now()
 
   if (loaded?.key === key) return loaded
@@ -432,7 +426,7 @@ async function build($: EngineInterface, path: string, topicsKey: string, previo
     const own = isMissing ? null : parseConfig(await $.fs.read(path))
     const extra = optionLists(pluginOptions)
     if (own === null && extra.length === 0) {
-      return { key: [topicsKey, githubKey].join('\n'), path, deps: [], packsUsed: new Map(), config: null, latest: null, filter: null }
+      return { key: topicsKey, path, deps: [], packsUsed: new Map(), config: null, latest: null, filter: null }
     }
     const config: Config = { placeholder: 'codename', informModel: true, ...own, lists: [...(own?.lists ?? []), ...extra] }
     latest = config
@@ -441,12 +435,12 @@ async function build($: EngineInterface, path: string, topicsKey: string, previo
     const home = await homeOf($)
     deps = config.lists.flatMap(list => (list.pack === undefined ? [] : packPaths(home, $.plugin.root, list.pack)))
     const packs = await loadPacks($, config, home)
-    const key = [topicsKey, githubKey, ...(await Promise.all(deps.map(d => statKey($, d))))].join('\n')
-    const filter = new Filter(config, await saltOf($), githubTerms, packs.terms)
+    const key = [topicsKey, ...(await Promise.all(deps.map(d => statKey($, d))))].join('\n')
+    const filter = new Filter(config, await saltOf($), packs.terms)
     return { key, path, deps, packsUsed: packs.used, config, latest, filter }
   } catch (error) {
     const message = error instanceof ConfigError ? error.message : 'the file could not be read'
-    const key = [topicsKey, githubKey, ...(await Promise.all(deps.map(d => statKey($, d))))].join('\n')
+    const key = [topicsKey, ...(await Promise.all(deps.map(d => statKey($, d))))].join('\n')
     return {
       key,
       path,
@@ -458,38 +452,6 @@ async function build($: EngineInterface, path: string, topicsKey: string, previo
       error: message,
     }
   }
-}
-
-/** Reads the repositories each list names by GitHub topic; the last good answer stands in on failure. */
-async function refreshGithub($: EngineInterface, config: Config): Promise<void> {
-  const found = new Map<number, string[]>()
-  const failed: string[] = []
-
-  for (const [i, list] of config.lists.entries()) {
-    if (list.githubTopic === undefined) continue
-    const storeKey = `github:${list.githubTopic}`
-    try {
-      const run = await $.process.run(
-        ['gh', 'repo', 'list', '--topic', list.githubTopic, '--limit', '1000', '--json', 'name'],
-        { timeoutMs: 15_000 },
-      )
-      if (run.exitCode !== 0) throw new Error('gh failed')
-      const names = (JSON.parse(run.stdout) as { name?: unknown }[])
-        .map(repo => repo.name)
-        .filter((name): name is string => typeof name === 'string')
-      await $.store.set(storeKey, names)
-      found.set(i, names)
-    } catch {
-      failed.push(list.githubTopic)
-      const cached = await $.store.get(storeKey)
-      if (Array.isArray(cached)) found.set(i, cached.filter((s): s is string => typeof s === 'string'))
-    }
-  }
-
-  githubTerms = found
-  githubKey = String(fnv1a(JSON.stringify([...found])))
-  githubProblem = failed.length > 0 ? `gh could not list topic ${failed.join(', ')}; using the last list seen` : undefined
-  checkedAt = 0
 }
 
 /** A message's first sentence: a period followed by a space or the end, so `lists[0].pack` is not one. */
@@ -504,7 +466,7 @@ function statusText(): string {
   if (loaded.filter === null) return `topic-filter: BLOCKING tool calls. ${firstSentence(loaded.error ?? '')} Run /topic-filter.`
   const base = `topic-filter: on, ${count(loaded.filter.termCount, 'term')}, ${hiddenCount} hidden`
   if (loaded.error !== undefined) return `${base}. Using the last good settings: ${firstSentence(loaded.error)} Run /topic-filter.`
-  return githubProblem === undefined ? base : `${base} (${githubProblem})`
+  return base
 }
 
 /** Whether all is well: filtering, with nothing for the person to fix or know. */
@@ -513,26 +475,35 @@ function isQuiet(): boolean {
     loaded !== undefined &&
     loaded.filter !== null &&
     loaded.error === undefined &&
-    githubProblem === undefined &&
     !paused
   )
 }
 
 /**
+ * Whether the person paused a filter that is otherwise in order: their own
+ * choice, so the footer label says it and no warning is pinned.
+ */
+function isCalmPause(): boolean {
+  return paused && loaded !== undefined && loaded.filter !== null && loaded.error === undefined
+}
+
+/**
  * The dim label topic-filter adds to the prompt footer's modes while all is
- * well, or undefined while the status line speaks for it.
+ * well or calmly paused, or undefined while the status line speaks for it.
  */
 function modeLabel(): string | undefined {
+  if (isCalmPause()) return 'topic-filter: paused'
   return isQuiet() ? `topic-filter: ${hiddenCount} hidden` : undefined
 }
 
 /**
  * Pins the status line only when something needs the person's attention (the
- * engine draws it as a warning); all being well, the footer label says it.
+ * engine draws it as a warning); all being well, or paused by the person, the
+ * footer label says it.
  */
 function showStatus($: EngineInterface): void {
   // The status line already names the plugin.
-  $.ui.status(isQuiet() ? undefined : statusText().replace(/^topic-filter: /, ''))
+  $.ui.status(isQuiet() || isCalmPause() ? undefined : statusText().replace(/^topic-filter: /, ''))
   $.ui.invalidate('ui.render')
 }
 
@@ -572,9 +543,6 @@ function describe(l: Loaded): string[] {
       const pack = l.packsUsed.get(i)
       if (pack !== undefined) parts.push(`pack ${pack.name} (${pack.where}, ${count(pack.terms, 'term')})`)
       else if (list.pack !== undefined) parts.push(`pack ${list.pack} (NOT FOUND)`)
-      if (list.githubTopic !== undefined) {
-        parts.push(`GitHub topic ${list.githubTopic} (${count(githubTerms.get(i)?.length ?? 0, 'repo')})`)
-      }
       if (list.terms.length > 0) parts.push(count(list.terms.length, 'own term'))
       if (list.exclude.length > 0) parts.push(`${list.exclude.length} excluded`)
       lines.push(`  "${list.name}": ${parts.join(', ')}`)
@@ -602,11 +570,7 @@ export function register(on: On, options: PluginOptions) {
       // The filter works without its command.
     }
 
-    const first = await current($)
-    if (first.config !== null && first.config.lists.some(l => l.githubTopic !== undefined)) {
-      await refreshGithub($, first.config)
-      await current($)
-    }
+    await current($)
     showStatus($)
     return next(e)
   })
@@ -790,8 +754,7 @@ export function register(on: On, options: PluginOptions) {
       }
       if (arg === 'reload') {
         loaded = undefined
-        const first = await current($)
-        if (first.config !== null) await refreshGithub($, first.config)
+        await current($)
         $.ui.invalidate('prompt.section')
         $.ui.invalidate('prompt.context')
         $.ui.invalidate('prompt.attachment')
@@ -830,7 +793,7 @@ export function register(on: On, options: PluginOptions) {
     return { ...rest, text: text.value }
   }).catch(() => ({ text: 'topic-filter failed while checking this output, so it is withheld.' }))
 
-  // The footer's dim mode labels: the hidden count while all is well.
+  // The footer's dim mode labels: the hidden count while all is well, or that it is paused.
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     const label = modeLabel()
     return label === undefined ? next(e) : next({ ...e, props: { ...e.props, modes: [...e.props.modes, label] } })

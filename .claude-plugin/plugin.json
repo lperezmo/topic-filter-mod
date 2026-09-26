@@ -1,6 +1,6 @@
 {
   "name": "topic-filter",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Keep unrelated topics from pulling Claude off your code: listed terms become stable placeholder names (or their lines are dropped) in tool output, prompts, CLAUDE.md, memory and skills before the model reads them.",
   "author": {
     "name": "Luis Perez Morales",

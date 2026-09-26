@@ -158,14 +158,12 @@ describe('tool output', () => {
     expect((r.result as { stdout: string }).stdout).toBe(GH_LIST)
   })
 
-  test('a topics file still naming a GitHub topic blocks tool calls and says to list the repositories', async ($, on) => {
-    const shown = world(on, '{"lists": [{"name": "repos", "mode": "drop-line", "githubTopic": "claude-hidden"}]}')
-    const ran = tools(on)
+  test('a leftover githubTopic in the topics file is ignored', async ($, on) => {
+    const shown = world(on, '{"lists": [{"name": "repos", "mode": "drop-line", "githubTopic": "claude-hidden", "terms": ["Teotihuacan"]}]}')
+    tools(on)
     const r = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
-    expect(r.deny).toMatch(/paused because the user's topic-filter settings have a problem/)
-    expect(shown.toasts.at(-1)).toMatch(/lists\[0\]\.githubTopic is no longer supported: list the repository names in lists\[0\]\.terms instead\./)
-    expect(await labelOf($)).toBe('topic-filter: blocking tool calls, run /topic-filter')
-    expect(ran).toEqual([])
+    expect(r.deny).toBeUndefined()
+    expect(shown.toasts).toEqual([])
   })
 
   test('pauses tool calls while the topics file is broken, telling the model nothing specific', async ($, on) => {

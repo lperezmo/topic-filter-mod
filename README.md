@@ -3,6 +3,8 @@
 </p>
 
 # topic-filter-mod
+
+[![test](https://github.com/lperezmo/topic-filter-mod/actions/workflows/test.yml/badge.svg)](https://github.com/lperezmo/topic-filter-mod/actions/workflows/test.yml)
 Code with Claude without your past life tagging along. Chosen topics become neutral placeholders before Claude reads them; nothing on disk changes.
 
 Your machine carries everything you have ever worked on: a career in
@@ -78,8 +80,11 @@ cannot express: drop-line or restore modes for your own words, several lists,
 `exclude`. Write it yourself in an editor rather than asking Claude, since it
 holds the words you are hiding. Its lists add to the settings'.
 
-> Built and tested against Claude Code 2.1.282. The function hooks API may
-> change between releases.
+> Needs Claude Code 2.1.277 or newer; older releases refuse to load the mod.
+> The stable update channel can lag behind that, so use the latest channel
+> if `claude --version` shows something older. CI runs the tests on 2.1.277,
+> 2.1.280 and the latest release, and again every week, since the function
+> hooks API may change between releases.
 
 ## Update
 

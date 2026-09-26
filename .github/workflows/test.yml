@@ -1,0 +1,58 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # Weekly, so a new Claude Code release that breaks the mod shows up on its own.
+  schedule:
+    - cron: "0 14 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  mod:
+    name: mod (Claude Code ${{ matrix.claude }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        # 2.1.277 is the oldest release with the prompt.attachment event the
+        # mod registers; earlier ones refuse to load it.
+        claude: ["2.1.277", "2.1.280", "latest"]
+        include:
+          - os: windows-latest
+            claude: latest
+    env:
+      DISABLE_AUTOUPDATER: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Claude Code ${{ matrix.claude }}
+        run: npm install -g @anthropic-ai/claude-code@${{ matrix.claude }}
+      - run: claude --version
+      - name: Validate manifests
+        run: |
+          claude plugin validate .claude-plugin/plugin.json
+          claude plugin validate .claude-plugin/marketplace.json
+      - name: Plugin tests
+        run: claude plugin test .
+
+  packs:
+    name: pack builder
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/packs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/ruff-action@v3
+        with:
+          src: tools/packs
+      - run: uv run pytest -q

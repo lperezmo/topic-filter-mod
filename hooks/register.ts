@@ -457,7 +457,7 @@ async function build($: EngineInterface, path: string, topicsKey: string, previo
 /** A message's first sentence: a period followed by a space or the end, so `lists[0].pack` is not one. */
 const firstSentence = (text: string) => /^.*?[.?!](?=\s|$)/.exec(text)?.[0] ?? text
 
-/** The status line: UI only, never sent to the model, so it may name packs and problems. */
+/** The state in a sentence, for `/topic-filter`: UI only, never sent to the model, so it may name packs and problems. */
 function statusText(): string {
   if (loaded === undefined || (loaded.filter === null && loaded.error === undefined)) {
     return 'topic-filter: off, nothing chosen to hide. Switch on packs in /config.'
@@ -469,41 +469,25 @@ function statusText(): string {
   return base
 }
 
-/** Whether all is well: filtering, with nothing for the person to fix or know. */
-function isQuiet(): boolean {
-  return (
-    loaded !== undefined &&
-    loaded.filter !== null &&
-    loaded.error === undefined &&
-    !paused
-  )
+/**
+ * The footer label, always shown. `isImportant` draws it in the theme's
+ * warning color: something needs the person, or nothing is being hidden.
+ * The details are in `/topic-filter`; the label only points there.
+ */
+function footerLabel(): { text: string; isImportant: boolean } {
+  if (loaded === undefined || (loaded.filter === null && loaded.error === undefined)) {
+    return { text: 'topic-filter: off, nothing chosen', isImportant: true }
+  }
+  if (paused) return { text: 'topic-filter: paused', isImportant: true }
+  if (loaded.filter === null) return { text: 'topic-filter: blocking tool calls, run /topic-filter', isImportant: true }
+  if (loaded.error !== undefined) {
+    return { text: `topic-filter: ${hiddenCount} hidden, settings problem, run /topic-filter`, isImportant: true }
+  }
+  return { text: `topic-filter: ${hiddenCount} hidden`, isImportant: false }
 }
 
-/**
- * Whether the person paused a filter that is otherwise in order: their own
- * choice, so the footer label says it and no warning is pinned.
- */
-function isCalmPause(): boolean {
-  return paused && loaded !== undefined && loaded.filter !== null && loaded.error === undefined
-}
-
-/**
- * The dim label topic-filter adds to the prompt footer's modes while all is
- * well or calmly paused, or undefined while the status line speaks for it.
- */
-function modeLabel(): string | undefined {
-  if (isCalmPause()) return 'topic-filter: paused'
-  return isQuiet() ? `topic-filter: ${hiddenCount} hidden` : undefined
-}
-
-/**
- * Pins the status line only when something needs the person's attention (the
- * engine draws it as a warning); all being well, or paused by the person, the
- * footer label says it.
- */
+/** Redraws the footer label. The warning-styled status line is never used. */
 function showStatus($: EngineInterface): void {
-  // The status line already names the plugin.
-  $.ui.status(isQuiet() || isCalmPause() ? undefined : statusText().replace(/^topic-filter: /, ''))
   $.ui.invalidate('ui.render')
 }
 
@@ -793,10 +777,19 @@ export function register(on: On, options: PluginOptions) {
     return { ...rest, text: text.value }
   }).catch(() => ({ text: 'topic-filter failed while checking this output, so it is withheld.' }))
 
-  // The footer's dim mode labels: the hidden count while all is well, or that it is paused.
+  // The footer's dim mode labels, with topic-filter's last. A label is a plain
+  // string, so an important one draws the row itself to color its own part.
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
-    const label = modeLabel()
-    return label === undefined ? next(e) : next({ ...e, props: { ...e.props, modes: [...e.props.modes, label] } })
+    const label = footerLabel()
+    if (!label.isImportant) return next({ ...e, props: { ...e.props, modes: [...e.props.modes, label.text] } })
+    const { Text } = await $.ui.resolve(e)
+    const others = e.props.modes.join(' & ')
+    return Text({
+      children: [
+        ...(others === '' ? [] : [Text({ dimColor: true, children: `${others} & ` })]),
+        Text({ color: 'warning', children: label.text }),
+      ],
+    })
   })
 
   // The sidebar: the whole session, or the subagent whose transcript is in view.

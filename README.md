@@ -149,11 +149,11 @@ The footer's `M hidden` counts each hidden word and each dropped line,
 not distinct terms. The footer label is drawn on the terminal and in the
 desktop app.
 
-topic-filter pins a status line under the prompt (which Claude Code draws as a
-warning) only when something needs you: nothing is switched on, or the
-settings have a problem. While all is well there is no status line, only the
-dim label, and while you have paused it the label reads
-`topic-filter: paused`.
+The label is the only thing topic-filter shows under the prompt; it never
+pins a warning. While all is well it is dim. When something needs you it turns
+yellow and says what: `topic-filter: paused`, `topic-filter: off, nothing
+chosen`, `topic-filter: blocking tool calls, run /topic-filter`, or a count
+with `settings problem`. `/topic-filter` then gives the details.
 
 What a subagent reads is filtered the same way, and its placeholders are
 refused in its tool calls too. The log lists each subagent under its own
@@ -270,10 +270,10 @@ lists every pack with what it covers and its counts (never its terms), and
 marks which of your lists use it.
 
 A pack name that does not exist is never ignored quietly, since that would
-hide nothing while looking set up. Tool calls pause, the status line and a
-toast name the missing pack, and `/topic-filter` suggests the closest real
-one ("Did you mean paleontology?") and lists what is available. Claude only
-hears that the settings have a problem, not which pack.
+hide nothing while looking set up. Tool calls pause, a toast names the
+missing pack, the footer label turns yellow, and `/topic-filter` suggests the
+closest real one ("Did you mean paleontology?") and lists what is available.
+Claude only hears that the settings have a problem, not which pack.
 
 **Built-in packs** ship in this repository's [`packs/`](packs) folder:
 
@@ -359,8 +359,8 @@ Going the other way:
   Writing another file that merely mentions its path (docs, a script) is fine.
 - **Fails closed.** If filtering throws or runs out of time, what it was
   filtering is withheld, never passed through. A broken topics file keeps the
-  last good list, or refuses tool calls until it is fixed, and the status line
-  says so.
+  last good list, or refuses tool calls until it is fixed, and the footer label
+  turns yellow to say so.
 
 ## Limits
 

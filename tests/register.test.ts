@@ -163,7 +163,8 @@ describe('tool output', () => {
     const ran = tools(on)
     const r = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
     expect(r.deny).toMatch(/paused because the user's topic-filter settings have a problem/)
-    expect(shown.statuses.at(-1)).toMatch(/BLOCKING tool calls\. lists\[0\]\.githubTopic is no longer supported: list the repository names in lists\[0\]\.terms instead\./)
+    expect(shown.toasts.at(-1)).toMatch(/lists\[0\]\.githubTopic is no longer supported: list the repository names in lists\[0\]\.terms instead\./)
+    expect(await labelOf($)).toBe('topic-filter: blocking tool calls, run /topic-filter')
     expect(ran).toEqual([])
   })
 
@@ -173,7 +174,9 @@ describe('tool output', () => {
     const r = await $.tool.call({ tool: 'Bash', command: 'ls' })
     expect(r.deny).toMatch(/paused because the user's topic-filter settings have a problem/)
     expect(r.deny?.includes('lists[0]')).toBe(false)
-    expect(shown.statuses.at(-1)).toMatch(/BLOCKING tool calls\. lists\[0\]\.terms\[1\] must be a string/)
+    expect(shown.toasts.at(-1)).toMatch(/lists\[0\]\.terms\[1\] must be a string/)
+    expect(await labelOf($)).toBe('topic-filter: blocking tool calls, run /topic-filter')
+    expect(shown.statuses.filter(s => s !== '')).toEqual([])
     expect(shown.toasts).toHaveLength(1)
     expect(ran).toEqual([])
   })
@@ -287,7 +290,8 @@ describe('packs', () => {
     const out = await seen($, on, 'anything')
     expect(out).toMatch(/paused because/)
     expect(out.includes('paleont')).toBe(false)
-    expect(shown.statuses.at(-1)).toMatch(/BLOCKING tool calls\. Pack "paleontolgy" \(lists\[0\]\) was not found\. Run/)
+    expect(shown.toasts.at(-1)).toMatch(/Pack "paleontolgy" \(lists\[0\]\) was not found\./)
+    expect(await labelOf($)).toBe('topic-filter: blocking tool calls, run /topic-filter')
 
     await $.command.run({ command: 'topic-filter', args: '' } as never)
     const problem = shown.logs.find(line => line.startsWith('Problem: '))
@@ -363,7 +367,7 @@ describe('/topic-filter log', () => {
     expect(text.includes('Context block claudeMd')).toBe(false)
     expect(text).toMatch(/ {2}Attachment \(file\)\n {6}Teotihuacan -> \S+ \(x1\)/)
     // All is well, so the warning-styled status line stays clear.
-    expect(shown.statuses.at(-1)).toBe('')
+    expect(shown.statuses.filter(s => s !== '')).toEqual([])
   })
 
   test('log clear empties it', async ($, on) => {
@@ -417,6 +421,12 @@ async function buttonsOf(ui: { findAll: (q: { type: string }) => Promise<{ text:
   return (await ui.findAll({ type: 'Button' })).map(t => t.text)
 }
 
+/** The footer label topic-filter draws now, as plain text, with no other modes. */
+async function labelOf($: Engine): Promise<string> {
+  const ui = await $.ui.mount({ plugin: 'topic-filter', surface: 'terminal', component: 'SessionMode', requestId: 'label', props: { modes: [] } })
+  return (await ui.findAll({ type: 'Text' })).map(n => n.text).find(s => s.startsWith('topic-filter:')) ?? ''
+}
+
 /** Every line of text a mounted drawing shows, in order. */
 async function textOf(ui: { findAll: (q: { type: string }) => Promise<{ text: string }[]> }): Promise<string[]> {
   return (await ui.findAll({ type: 'Text' })).map(t => t.text)
@@ -426,7 +436,7 @@ const SURFACES = ['terminal', 'desktop'] as const
 
 describe('footer label', () => {
   for (const surface of SURFACES) {
-    test(`all well, the count is a dim footer mode; paused, the status line says so (${surface})`, async ($, on) => {
+    test(`the footer label: a dim count while all is well, yellow while paused (${surface})`, async ($, on) => {
       const shown = world(on)
       tools(on)
       // Beneath the plugin, the engine's own footer: the modes joined.
@@ -437,12 +447,13 @@ describe('footer label', () => {
       await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
       const ui = await $.ui.mount({ plugin: 'topic-filter', surface, component: 'SessionMode', requestId: 'modes', props: { modes: ['focus'] } })
       expect(await textOf(ui)).toEqual(['focus & topic-filter: 2 hidden'])
-      expect(shown.statuses.at(-1)).toBe('')
+      expect(shown.statuses.filter(s => s !== '')).toEqual([])
 
       await $.command.run(typed('off'))
       await ui.redraw()
-      expect(await textOf(ui)).toEqual(['focus & topic-filter: paused'])
-      expect(shown.statuses.at(-1)).toBe('')
+      expect((await textOf(ui)).join('')).toContain('focus & topic-filter: paused')
+      expect((await ui.findAll({ type: 'Text' })).some(n => n.props?.color === 'warning')).toBe(true)
+      expect(shown.statuses.filter(s => s !== '')).toEqual([])
     })
   }
 })
@@ -667,7 +678,7 @@ describe('pause', () => {
     const off = await $.command.run(typed('off'))
     expect(shown.logs[0]).toBe('topic-filter paused: nothing is hidden until /topic-filter on.')
     expect(off.context?.[0]).toMatch(/^The user paused topic-filter/)
-    expect(shown.statuses.at(-1)).toBe('')
+    expect(shown.statuses.filter(s => s !== '')).toEqual([])
 
     const open = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
     expect((open.result as { stdout: string }).stdout).toBe(GH_LIST)
@@ -692,7 +703,7 @@ describe('pause', () => {
       shown.logs.length = 0
       await $.command.run(typed(arg))
       expect(shown.logs.join('\n')).toMatch(log)
-      expect(shown.statuses.at(-1)).toBe('')
+      expect(shown.statuses.filter(s => s !== '')).toEqual([])
     }
   })
 

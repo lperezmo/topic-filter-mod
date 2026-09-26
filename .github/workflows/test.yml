@@ -28,6 +28,8 @@ jobs:
             claude: latest
     env:
       DISABLE_AUTOUPDATER: "1"
+      # Mods are early access; without this `plugin test` refuses to run.
+      CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

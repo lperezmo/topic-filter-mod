@@ -43,7 +43,7 @@ jobs:
         shell: pwsh
         run: |
           & ([scriptblock]::Create((irm https://claude.ai/install.ps1))) ${{ matrix.claude }}
-          "$env:USERPROFILE\.localin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          Join-Path $env:USERPROFILE '.local/bin' | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
       - run: claude --version
       - name: Validate manifests
         run: |

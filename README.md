@@ -322,12 +322,6 @@ paths, file contents and memory. Take the name out to bring it back. The
 topics file is guarded, so the list of hidden names never enters the
 transcript.
 
-Versions before 0.6.0 could also find repositories by GitHub topic
-(`githubTopic`, and the Hide repos tagged on GitHub setting). That lookup ran
-`gh` with your GitHub login, so it is gone: a topics file that still has
-`githubTopic` stops tool calls until you list those repositories in `terms`,
-and the old settings are ignored.
-
 ## What it covers
 
 Text reaches the model through many doors, and there is no single outgoing

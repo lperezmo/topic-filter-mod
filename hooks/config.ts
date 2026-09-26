@@ -69,12 +69,6 @@ function parseList(list: unknown, i: number): ListConfig {
   const at = `lists[${i}]`
   if (!isRecord(list)) throw new ConfigError(`${at} must be an object`)
 
-  // Removed in 0.6.0. Refusing it, rather than skipping it, keeps repositories
-  // someone relied on hiding from reaching the model unnoticed.
-  if (list.githubTopic !== undefined) {
-    throw new ConfigError(`${at}.githubTopic is no longer supported: list the repository names in ${at}.terms instead.`)
-  }
-
   const pack = list.pack
   if (pack !== undefined && (typeof pack !== 'string' || !SLUG.test(pack))) {
     throw new ConfigError(`${at}.pack must be a pack name (lowercase letters, digits, hyphens)`)

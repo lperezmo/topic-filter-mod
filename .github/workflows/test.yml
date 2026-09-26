@@ -32,11 +32,18 @@ jobs:
       CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: "1"
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install Claude Code ${{ matrix.claude }}
-        run: npm install -g @anthropic-ai/claude-code@${{ matrix.claude }}
+      # The native installer from the quickstart, pinned to the matrix version.
+      - name: Install Claude Code ${{ matrix.claude }} (Linux)
+        if: runner.os != 'Windows'
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash -s ${{ matrix.claude }}
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install Claude Code ${{ matrix.claude }} (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & ([scriptblock]::Create((irm https://claude.ai/install.ps1))) ${{ matrix.claude }}
+          "$env:USERPROFILE\.localin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
       - run: claude --version
       - name: Validate manifests
         run: |

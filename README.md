@@ -2,10 +2,11 @@
   <img src=".claude-plugin/icon.svg" alt="topic-filter logo: a benzene ring swapped for code braces" width="200">
 </p>
 
+[![test](https://github.com/lperezmo/topic-filter-mod/actions/workflows/test.yml/badge.svg)](https://github.com/lperezmo/topic-filter-mod/actions/workflows/test.yml)
+
 # topic-filter-mod
 
-[![test](https://github.com/lperezmo/topic-filter-mod/actions/workflows/test.yml/badge.svg)](https://github.com/lperezmo/topic-filter-mod/actions/workflows/test.yml)
-Code with Claude without your past life tagging along. Chosen topics become neutral placeholders before Claude reads them; nothing on disk changes.
+Claude mod to swap words for placeholders for selected topics (like biochemistry) to avoid safety refusals from latest models.
 
 Your machine carries everything you have ever worked on: a career in
 chemistry, a thesis, old side projects, a client's name. None of it has

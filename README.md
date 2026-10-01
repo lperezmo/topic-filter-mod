@@ -99,10 +99,16 @@ Either way, restart Claude Code afterwards; running sessions keep the old
 version. `claude plugin list` shows the version you have. Updates never touch
 your topics file or your own packs in `~/.claude/topic-filter/`.
 
-**Upgrading to 0.7.0.** The built-in cybersecurity pack is gone. If a list in
-your topics file has `"pack": "cybersecurity"`, tool calls pause until you take
-it out, and its `/config` switch no longer does anything. A list that uses a
-pack can no longer set `"restore": true`.
+**Upgrading to 0.7.0.**
+
+- The built-in cybersecurity pack is gone. If a list in your topics file has
+  `"pack": "cybersecurity"`, tool calls pause until you take it out. Its
+  `/config` switch is gone too, and a saved value is ignored.
+- A list that uses a pack can no longer set `"restore": true`. Such a topics
+  file is now a settings problem: tool calls pause until the `restore` is
+  removed.
+- The system prompt, Claude Code's own reminders and built-in tools'
+  descriptions are no longer filtered (see [Limits](#limits)).
 
 To remove it: `claude plugin uninstall topic-filter@topic-filter-mod`. Your
 topics file stays until you delete it.
@@ -385,7 +391,9 @@ Going the other way:
   editing or writing it is refused, as is any shell command that names it.
   Writing another file that merely mentions its path (docs, a script) is fine.
 - **Fails closed.** If filtering throws or runs out of time, what it was
-  filtering is withheld, never passed through. A broken topics file keeps the
+  filtering is withheld, never passed through. The one exception is an MCP
+  tool's description, which keeps its original text, so a failure never
+  replaces another tool's instructions. A broken topics file keeps the
   last good list, or refuses tool calls until it is fixed, and the footer label
   turns yellow to say so.
 
@@ -409,6 +417,10 @@ Read these before relying on it.
   it, so what Claude Code puts there, such as your memory index (`MEMORY.md`),
   reaches the model unfiltered. Memory files Claude reads with a tool are
   filtered like any other file.
+- **Claude Code's own text is left as it is.** Its reminders, mode changes and
+  listings (skills, deferred tools) and the descriptions of built-in tools
+  reach the model unfiltered, so a listed term in a skill's name or an MCP
+  server's name in those listings gets through.
 - **Sessions from before the mod was on** already hold the raw terms.
 - **Other plugins** that hook `tool.call` beneath this one see raw results.
 - **Your settings are readable.** The pack switches and pack names you set

@@ -264,6 +264,37 @@ describe('context', () => {
     expect(r.text).toBe(reminder)
   })
 
+  test("a failure drops a filtered attachment and leaves Claude Code's own reminder", async ($, on) => {
+    world(on)
+    on('prompt.attachment', async () => {
+      throw new Error('boom')
+    })
+    const file = await $.prompt.attachment({ type: 'file', text: 'x', origin: { kind: 'engine' } as never })
+    expect(file.text).toBeNull()
+    // For a reminder the mod stands aside: the failure beneath is not turned into a drop.
+    let reason = ''
+    try {
+      await $.prompt.attachment({ type: 'plan_mode', text: 'Plan mode is on.', origin: { kind: 'engine' } as never })
+    } catch (error) {
+      reason = String(error)
+    }
+    expect(reason).toMatch(/prompt\.attachment/)
+  })
+
+  test('a failure on a tool description is not turned into a withheld description', async ($, on) => {
+    world(on)
+    on('tool.describe', async () => {
+      throw new Error('boom')
+    })
+    let reason = ''
+    try {
+      await $.tool.describe({ tool: 'mcp__notes__search', description: 'Search notes', provider: { plugin: 'mcp:notes', tier: 'user' } } as never)
+    } catch (error) {
+      reason = String(error)
+    }
+    expect(reason).toMatch(/tool\.describe/)
+  })
+
   test("filters MCP tool descriptions and leaves built-in tools' alone", async ($, on) => {
     world(on)
     on('tool.describe', async ($, e) => ({ description: e.description }))

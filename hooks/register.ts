@@ -60,6 +60,10 @@ const MODEL_FACING_TOOLS = new Set([
  */
 const CONTENT_ATTACHMENTS = new Set(['file', 'edited_text_file', 'nested_memory', 'queued_command'])
 
+/** Whether a tool comes from an MCP server; by name on a build without `provider`. */
+const isMcpTool = (e: { tool: string; provider?: { plugin?: string } }) =>
+  e.provider?.plugin?.startsWith('mcp:') ?? e.tool.startsWith('mcp__')
+
 /** Whether the mod filters this attachment. */
 const filtersAttachment = (e: { type: string; origin?: { kind: string } }) =>
   e.origin?.kind !== 'engine' || CONTENT_ATTACHMENTS.has(e.type)
@@ -697,9 +701,7 @@ export function register(on: On, options: PluginOptions) {
     counted($, tally, `Attachment (${e.type})`, 'context', 'replace', `attachment:${e.type}:${fnv1a(r.text)}`, e.agentId)
     if (!text.changed) return r
     return { text: text.vanished ? null : text.value }
-  }).catch(($, e, next) =>
-    filtersAttachment(e) ? { text: null } : next.called ? { text: e.text } : next(e),
-  )
+  }).catch(($, e) => (filtersAttachment(e) ? { text: null } : undefined))
 
   on('skill.prompt', async ($, e, next) => {
     const r = await next(e)
@@ -715,12 +717,12 @@ export function register(on: On, options: PluginOptions) {
   // Claude Code's own instructions for it, which are never changed.
   on('tool.describe', async ($, e, next) => {
     const r = await next(e)
-    if (!e.provider.plugin.startsWith('mcp:')) return r
+    if (!isMcpTool(e)) return r
     const f = await active($)
     if (f === null) return r
     const text = f.text(r.description, newTally(), false)
     return text.changed ? { ...r, description: text.value } : r
-  }).catch(($, e, next) => (next.called ? { description: e.description } : next(e)))
+  }).catch(() => undefined)
 
   on('session.receive', async ($, e, next) => {
     const f = await active($)

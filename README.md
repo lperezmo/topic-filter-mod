@@ -350,9 +350,12 @@ Going the other way:
   exempt, since they are the model talking to itself or to you.
 - **Restore.** The one case where the mod changes a tool's input: for a list
   with `"restore": true`, a placeholder from that list in a tool call is
-  written back as the real term before the tool runs, in any tool except the
-  exempt ones above. The tool then runs on the real word, not on what Claude
-  wrote. Without a restore list, tool input is never changed.
+  written back as the real term before the tool runs. This applies to every
+  tool (Bash, Read, Edit, Write, Grep, Glob, WebFetch, MCP tools and the rest)
+  except Agent, Task, TodoWrite, TaskCreate, TaskUpdate, AskUserQuestion,
+  ExitPlanMode and SendMessage, whose input is passed on unchanged. The tool
+  then runs on the real word, not on what Claude wrote. Without a restore
+  list, tool input is never changed.
 - **No blind overwrites.** Once the model has read a file with something
   hidden, a whole-file `Write` to it is refused: its copy lacks what it never
   saw. `Edit` still works, and fails safely if its text spans something hidden.

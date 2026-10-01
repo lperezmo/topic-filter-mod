@@ -101,9 +101,9 @@ export type Summary = {
 }
 
 export class HiddenLog {
-  /** Passing sources by key, least recently hidden first. */
+  /** Passing sources by slot, least recently hidden first. */
   private readonly passing = new Map<string, Entry>()
-  /** Standing sources by key. */
+  /** Standing sources by slot. */
   private readonly standing = new Map<string, Entry>()
   /** Passing sources forgotten to stay under the cap. */
   private forgotten = 0
@@ -114,16 +114,16 @@ export class HiddenLog {
   constructor(private readonly now: () => number = () => Date.now()) {}
 
   /**
-   * Adds one pass's hits under `source`, shown cut to one line; `key` tells
+   * Adds one pass's hits under `source`, shown cut to one line; `slot` tells
    * sources apart when their labels could match (a long path cut short), and
    * `agent` names the subagent whose loop read it.
    */
-  record(source: string, tally: Tally, mode: LogMode = 'add', key: string = source, agent?: string, kind: SourceKind = 'tools'): void {
+  record(source: string, tally: Tally, mode: LogMode = 'add', slot: string = source, agent?: string, kind: SourceKind = 'tools'): void {
     const entries = mode === 'standing' ? this.standing : this.passing
-    key = agent === undefined ? key : `${agent}\u0000${key}`
-    const previous = entries.get(key)
+    slot = agent === undefined ? slot : `${agent}\u0000${slot}`
+    const previous = entries.get(slot)
     if (tally.hits.size === 0) {
-      if (mode !== 'add' && previous !== undefined) entries.delete(key)
+      if (mode !== 'add' && previous !== undefined) entries.delete(slot)
       return
     }
 
@@ -141,9 +141,9 @@ export class HiddenLog {
     if (isNew) this.remember(label(source), tally, at, agent)
 
     // Newest last: a source hidden again moves to the end.
-    entries.delete(key)
+    entries.delete(slot)
     const entry: Entry = { label: label(source), kind, at, hits }
-    entries.set(key, agent === undefined ? entry : { ...entry, agent })
+    entries.set(slot, agent === undefined ? entry : { ...entry, agent })
 
     while (this.passing.size > MAX_SOURCES) {
       this.passing.delete(this.passing.keys().next().value!)

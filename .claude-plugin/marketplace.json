@@ -13,7 +13,7 @@
       "name": "topic-filter",
       "source": "./",
       "description": "Keep unrelated topics from pulling Claude off your code: listed terms become stable placeholder names (or their lines are dropped) before the model reads them.",
-      "category": "security"
+      "category": "productivity"
     }
   ]
 }

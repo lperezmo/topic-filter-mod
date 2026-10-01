@@ -17,7 +17,8 @@ without explaining your history first.
 
 `topic-filter` is a [Claude Mod](https://github.com/anthropics/claude-code/tree/main/mods)
 (a Claude Code plugin built on function hooks) that keeps chosen topics out of
-the way. Before the model reads anything, each listed term becomes a stable
+the way. Before the model reads tool output, prompts, CLAUDE.md and skills,
+each listed term becomes a stable
 placeholder (`Teotihuacan` becomes `Teacup7`), or the lines that mention it
 disappear. Your repos, notes and memory stay as they are.
 
@@ -71,8 +72,8 @@ hidden and where (both shown to you only).
 
 The [topics file](#the-topics-file) is optional. Use it for what the settings
 cannot express: drop-line or restore modes for your own words, several lists,
-`exclude`. Write it yourself in an editor rather than asking Claude, since it
-holds the words you are hiding. Its lists add to the settings'.
+`exclude`. Edit it in an editor: it lists the very terms you want kept out of
+the session. Its lists add to the settings'.
 
 > Needs Claude Code 2.1.287 or newer. The stable update channel can lag
 > behind that, so use the latest channel if `claude --version` shows
@@ -98,6 +99,11 @@ Either way, restart Claude Code afterwards; running sessions keep the old
 version. `claude plugin list` shows the version you have. Updates never touch
 your topics file or your own packs in `~/.claude/topic-filter/`.
 
+**Upgrading to 0.7.0.** The built-in cybersecurity pack is gone. If a list in
+your topics file has `"pack": "cybersecurity"`, tool calls pause until you take
+it out, and its `/config` switch no longer does anything. A list that uses a
+pack can no longer set `"restore": true`.
+
 To remove it: `claude plugin uninstall topic-filter@topic-filter-mod`. Your
 topics file stays until you delete it.
 
@@ -110,7 +116,7 @@ to see. [List their names](#hiding-repositories-without-deleting-them) in a
 Run `/topic-filter` in a session to see each list and where its terms come
 from, `/topic-filter packs` to see every topic pack and which lists use it,
 `/topic-filter off` and `on` to [pause and resume it](#pausing-it),
-and `/topic-filter reload` after tagging repos. The overview and the pack list
+and `/topic-filter reload` after editing packs. The overview and the pack list
 show counts, never terms.
 Edits to the topics file and packs are picked up on their own.
 
@@ -136,7 +142,7 @@ are hiding. `/topic-filter log clear` empties the second part sooner; the
 first stays, as that text is still in every request.
 
 Every `/topic-filter` output is shown to you only: it names packs, lists and
-terms, which would tell Claude what is being hidden. Two caveats for the log,
+terms, so it is printed for you and not added to the conversation. Two caveats for the log,
 which names real terms:
 
 - Claude Code copies every such line into its debug log, so with `--debug` or
@@ -190,7 +196,7 @@ what that subagent read.
   it to counts by list, with no words, placeholders or file names, in the tree
   and the feed alike.
 
-The sidebar is drawn on your screen only and never reaches Claude.
+The sidebar is drawn in your terminal and is not part of the conversation.
 
 ### Pausing it
 
@@ -210,8 +216,8 @@ lists and terms it resumed with.
   the count, and the sidebar says so at the top.
 - **Claude is told.** Pausing and resuming each leave Claude a one-line note,
   so it knows whether placeholders will be refused.
-- **Two guards stay on.** The topics file is still out of reach, since reading
-  it would show the whole list. A file Claude read with content hidden still
+- **Two guards stay on.** The topics file is still not read into the session,
+  since that would bring every listed term back into context. A file Claude read with content hidden still
   cannot be overwritten whole until Claude reads it again, in full, while
   paused.
 
@@ -239,7 +245,7 @@ What Claude read before the pause keeps its placeholders.
 | `lists[].terms` | `[]` | The terms to hide. |
 | `lists[].mode` | `replace` | `replace` swaps each term for its placeholder. `drop-line` removes every line that mentions a term; in JSON (`gh ... --json`, MCP results) the whole array item goes. A typed prompt always gets placeholders, never lost lines. |
 | `lists[].match` | `word` | `word` matches whole words only. `substring` matches inside words too (`maya` in `Mayapan`). |
-| `lists[].restore` | `false` | When the model uses this list's placeholder in a tool call, write the real term back instead of refusing. For drafting text that must contain real names the model should not read. |
+| `lists[].restore` | `false` | When the model uses this list's placeholder in a tool call, write the real term back instead of refusing. For your own names (contacts, client names) that a tool must write out exactly. Not allowed on a list that uses a `pack`. |
 | `lists[].pack` | none | A [topic pack](#topic-packs) whose terms join the list. |
 | `lists[].exclude` | `[]` | Terms to leave out of the list, whatever brought them in (a pack or `terms`). Matched the same forgiving way as terms. |
 
@@ -262,7 +268,8 @@ every name yourself. Point a list at one:
 { "lists": [{ "name": "anthropology", "pack": "anthropology", "exclude": ["Maya"], "terms": ["my extra word"] }] }
 ```
 
-The list keeps its own `mode`, `match` and `restore`, `exclude` drops pack
+The list keeps its own `mode` and `match` (`restore` is not allowed on a
+pack list), `exclude` drops pack
 terms you do not want hidden, and `terms` adds your own. `/topic-filter packs`
 lists every pack with what it covers and its counts (never its terms), and
 marks which of your lists use it.
@@ -271,7 +278,7 @@ A pack name that does not exist is never ignored quietly, since that would
 hide nothing while looking set up. Tool calls pause, a toast names the
 missing pack, the footer label turns yellow, and `/topic-filter` suggests the
 closest real one ("Did you mean paleontology?") and lists what is available.
-Claude only hears that the settings have a problem, not which pack.
+The session is told only that the settings need attention.
 
 **Built-in packs** ship in this repository's [`packs/`](packs) folder:
 
@@ -316,14 +323,14 @@ instead):
 
 Each one vanishes from `gh repo list`, `gh api` JSON, GitHub MCP results,
 paths and file contents. Take the name out to bring it back. The
-topics file is guarded, so the list of hidden names never enters the
-transcript.
+topics file is not read into the session, since that would bring every
+listed name back into context.
 
 ## What it covers
 
 Text reaches the model through many doors, and there is no single outgoing
 request to filter (`turn.step` carries a message count, not the messages). So
-every door is hooked:
+every door but the system prompt is hooked:
 
 | What the model reads | Event |
 | --- | --- |
@@ -336,10 +343,25 @@ every door is hooked:
 
 Each of these hooks changes one thing: it replaces listed terms in the text
 with their placeholders (or drops the line, for a `drop-line` list) and
-passes everything else on unchanged. The system prompt is never hooked
-or changed. `prompt.submit` filters every prompt
+passes everything else on unchanged. With `informModel` on (the default),
+Claude also gets one short note that placeholders exist, quoted below. The
+system prompt is never hooked or changed. `prompt.submit` filters every prompt
 that passes through it, yours or one another plugin submits; the mod never
 submits a prompt itself.
+
+The note Claude gets once per session, in the first message's context:
+
+> Some names in this session may be placeholders written by the user's
+> topic-filter mod: capitalized numbered codenames such as Bubblegum7 or
+> Kazoo12, or tags such as [hidden-3fa2c1]. Each stands for an item the user
+> has set aside as off-topic for this session, and lines about some of those
+> items are removed entirely. Treat a placeholder as an opaque name and do not
+> guess what it stands for. Mentioning placeholders in replies is fine. A tool
+> call (command, search, file edit) that uses one is refused, unless the note
+> on the output it came from says that placeholder may be used.
+
+Tool output that had something replaced carries a one-line note saying how
+many terms were replaced and whether their placeholders may be used.
 
 Going the other way:
 
@@ -358,8 +380,8 @@ Going the other way:
 - **No blind overwrites.** Once the model has read a file with something
   hidden, a whole-file `Write` to it is refused: its copy lacks what it never
   saw. `Edit` still works, and fails safely if its text spans something hidden.
-- **The topics file is off limits.** It names your lists and packs, which
-  say what is hidden even where the words themselves are filtered. Reading,
+- **The topics file stays out of the session.** It names your lists and
+  packs, so reading it would bring every listed term back into context. Reading,
   editing or writing it is refused, as is any shell command that names it.
   Writing another file that merely mentions its path (docs, a script) is fine.
 - **Fails closed.** If filtering throws or runs out of time, what it was
@@ -377,8 +399,7 @@ Read these before relying on it.
 - **Only text is filtered.** Text inside images and PDFs gets through.
 - **Encodings get through.** Base64, hex, a word split across lines, or a file
   whose accents were saved in the wrong encoding (`Teotihuac?n`) does not
-  match. In testing, the model reconstructed a word from exactly that last
-  case. This is a filter, not a security boundary.
+  match. This is a focus aid, not a security or privacy boundary.
 - **Your local transcript keeps what you typed.** The model receives your
   prompt with placeholders, but the engine's queue record in the session file
   on disk holds the text as typed.
@@ -405,7 +426,7 @@ Read these before relying on it.
   `/config` and search `topic-filter`.
 - **Status says `BLOCKING tool calls`.** A setting or the topics file has a
   problem, such as a pack name that does not exist, and tool calls pause until
-  it is fixed so nothing leaks. `/topic-filter` shows the reason and suggests
+  it is fixed so no listed term slips through. `/topic-filter` shows the reason and suggests
   the closest pack name.
 - **A switch set in `/plugin` did not take.** That screen needs the word
   `true`; anything else is saved as false. `/config` has real switches.
@@ -447,11 +468,7 @@ you typed.
 ## Roadmap
 
 - More built-in packs.
-- An optional classifier for text that is about a topic without using a
-  listed word (a local GLiNER server, or Jev), withholding whole chunks.
-- Show you the real names in the transcript view while the model sees
-  placeholders, and a `/topics` pane for adding terms without typing them into
-  the transcript.
+- A `/topics` pane for adding terms without typing them into the conversation.
 
 ## License
 

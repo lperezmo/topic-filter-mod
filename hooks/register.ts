@@ -1,6 +1,6 @@
 // topic-filter: hides chosen topics from the model.
 //
-// Every place text enters the model's context is hooked, and the listed
+// Every place text enters the model's context, except the system prompt, is hooked, and the listed
 // terms in it become placeholder names (or their lines are dropped) before
 // the model reads it: tool results on their way up from core, the person's
 // prompt, the first message's context blocks
@@ -56,7 +56,7 @@ const MODEL_FACING_TOOLS = new Set([
 const EXPLAINER =
   "Some names in this session may be placeholders written by the user's topic-filter mod: capitalized " +
   'numbered codenames such as Bubblegum7 or Kazoo12, or tags such as [hidden-3fa2c1]. Each stands for an item the ' +
-  'user has hidden from this session, and lines about some hidden items are removed entirely. Treat a ' +
+  'user has set aside as off-topic for this session, and lines about some of those items are removed entirely. Treat a ' +
   'placeholder as an opaque name and do not guess what it stands for. Mentioning placeholders in replies ' +
   'is fine. A tool call (command, search, file edit) that uses one is refused, unless the note on the ' +
   'output it came from says that placeholder may be used.'
@@ -169,7 +169,7 @@ function toolSource(tool: string, input: Record<string, unknown>): string {
 /** The `configPath` option; empty means the default under the home directory. */
 let configured = ''
 
-/** The plugin's settings: what to hide besides the topics file (packs, tagged repos, extra words). */
+/** The plugin's settings: what to hide besides the topics file (packs, extra words). */
 let pluginOptions: PluginOptions = {}
 
 /** Files the model has read with something hidden, by pathKey. */

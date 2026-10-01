@@ -103,6 +103,7 @@ const filter = () => new Filter(CONFIG, 'test-salt-0123456789')
 describe('config and packs', () => {
   test('a pack name must be a plain name, never a path', () => {
     expect(() => parseConfig('{"lists": [{"pack": "../secrets"}]}')).toThrow(/lists\[0\]\.pack must be a pack name/)
+    expect(() => parseConfig('{"lists": [{"pack": "demo", "restore": true}]}')).toThrow(/lists\[0\]\.restore is not allowed on a list that uses a pack/)
   })
 
   test('pack errors name the pack and a position, never a term', () => {

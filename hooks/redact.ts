@@ -345,7 +345,7 @@ export function noteFor(tally: Tally, restorable: ReadonlySet<string> = new Set(
         : `Of these, ${usable.join(', ')} may be used in tool calls (the real name is put back); a tool call using any other is refused.`
 
   return (
-    `topic-filter: ${parts.join(', and ')}. The user has hidden these items from this session. ` +
+    `topic-filter: ${parts.join(', and ')}. The user has set these items aside as off-topic for this session. ` +
     `Treat a placeholder as an opaque name and do not guess what it stands for. ${rule}`
   )
 }

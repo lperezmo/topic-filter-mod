@@ -74,11 +74,16 @@ function parseList(list: unknown, i: number): ListConfig {
     throw new ConfigError(`${at}.pack must be a pack name (lowercase letters, digits, hyphens)`)
   }
 
+  const restore = flag(list.restore, false, `${at}.restore`)
+  // Restore writes real terms into tool input; it is for the person's own
+  // names, never for a topic pack.
+  if (restore && pack !== undefined) throw new ConfigError(`${at}.restore is not allowed on a list that uses a pack`)
+
   return {
     name: typeof list.name === 'string' ? list.name : `list ${i + 1}`,
     mode: oneOf(list.mode, ['replace', 'drop-line'] as const, 'replace', `${at}.mode`),
     match: oneOf(list.match, ['word', 'substring'] as const, 'word', `${at}.match`),
-    restore: flag(list.restore, false, `${at}.restore`),
+    restore,
     terms: strings(list.terms, `${at}.terms`),
     pack,
     exclude: strings(list.exclude, `${at}.exclude`),

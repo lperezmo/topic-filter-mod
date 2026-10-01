@@ -52,6 +52,18 @@ const MODEL_FACING_TOOLS = new Set([
   'SendMessage',
 ])
 
+/**
+ * The attachments the engine writes from the person's own content: files
+ * mentioned or edited, nested CLAUDE.md files, prompts queued into a turn.
+ * Its other attachments (reminders, mode changes, listings) are Claude Code's
+ * own text and pass unchanged; settings-hook and plugin context is filtered.
+ */
+const CONTENT_ATTACHMENTS = new Set(['file', 'edited_text_file', 'nested_memory', 'queued_command'])
+
+/** Whether the mod filters this attachment. */
+const filtersAttachment = (e: { type: string; origin?: { kind: string } }) =>
+  e.origin?.kind !== 'engine' || CONTENT_ATTACHMENTS.has(e.type)
+
 /** The context block that tells the model placeholders exist; stable, so the prompt cache holds. */
 const EXPLAINER =
   "Some names in this session may be placeholders written by the user's topic-filter mod: capitalized " +
@@ -675,6 +687,7 @@ export function register(on: On, options: PluginOptions) {
 
   on('prompt.attachment', async ($, e, next) => {
     const r = await next(e)
+    if (!filtersAttachment(e)) return r
     const f = await active($)
     if (f === null || r.text === null) return r
     const tally = newTally()
@@ -684,7 +697,9 @@ export function register(on: On, options: PluginOptions) {
     counted($, tally, `Attachment (${e.type})`, 'context', 'replace', `attachment:${e.type}:${fnv1a(r.text)}`, e.agentId)
     if (!text.changed) return r
     return { text: text.vanished ? null : text.value }
-  }).catch(() => ({ text: null }))
+  }).catch(($, e, next) =>
+    filtersAttachment(e) ? { text: null } : next.called ? { text: e.text } : next(e),
+  )
 
   on('skill.prompt', async ($, e, next) => {
     const r = await next(e)
@@ -696,13 +711,16 @@ export function register(on: On, options: PluginOptions) {
     return text.changed ? { text: text.value } : r
   }).catch(() => ({ text: 'topic-filter failed while checking this skill, so its text is withheld.' }))
 
+  // Only MCP tools' descriptions: a built-in tool's description carries
+  // Claude Code's own instructions for it, which are never changed.
   on('tool.describe', async ($, e, next) => {
     const r = await next(e)
+    if (!e.provider.plugin.startsWith('mcp:')) return r
     const f = await active($)
     if (f === null) return r
     const text = f.text(r.description, newTally(), false)
     return text.changed ? { ...r, description: text.value } : r
-  }).catch(() => ({ description: 'topic-filter failed while checking this description, so it is withheld.' }))
+  }).catch(($, e, next) => (next.called ? { description: e.description } : next(e)))
 
   on('session.receive', async ($, e, next) => {
     const f = await active($)

@@ -337,8 +337,8 @@ every door but the system prompt is hooked:
 | Tool results: Bash, Read, Grep, Glob, WebFetch, MCP tools, subagent answers, errors | `tool.call`, on the way up |
 | Your typed prompt | `prompt.submit` |
 | CLAUDE.md and the other first-message context blocks | `prompt.context` |
-| Mentioned files, reminders, context added by classic hooks | `prompt.attachment` |
-| Skill text, tool descriptions, slash command output | `skill.prompt`, `tool.describe`, `command.run` |
+| Mentioned and edited files, nested CLAUDE.md, queued prompts, context added by classic hooks and plugins (Claude Code's own reminders pass unchanged) | `prompt.attachment` |
+| Skill text, MCP tool descriptions (built-in tools keep theirs), slash command output | `skill.prompt`, `tool.describe`, `command.run` |
 | Remote Control and peer deliveries | `session.receive` |
 
 Each of these hooks changes one thing: it replaces listed terms in the text

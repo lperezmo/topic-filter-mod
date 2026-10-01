@@ -248,6 +248,30 @@ describe('context', () => {
     const r = await $.prompt.attachment({ type: 'file', text: 'x', origin: { kind: 'engine' } as never })
     expect(r.text?.includes('Teotihuacan')).toBe(false)
   })
+
+  test("rewrites a settings hook's context", async ($, on) => {
+    world(on)
+    on('prompt.attachment', async () => ({ text: 'Hook says: Teotihuacan' }))
+    const r = await $.prompt.attachment({ type: 'hook_additional_context', text: 'x', origin: { kind: 'hook', event: 'SessionStart' } as never })
+    expect(r.text?.includes('Teotihuacan')).toBe(false)
+  })
+
+  test("leaves Claude Code's own reminders unchanged", async ($, on) => {
+    world(on)
+    const reminder = 'Plan mode is on. Teotihuacan'
+    on('prompt.attachment', async () => ({ text: reminder }))
+    const r = await $.prompt.attachment({ type: 'plan_mode', text: 'x', origin: { kind: 'engine' } as never })
+    expect(r.text).toBe(reminder)
+  })
+
+  test("filters MCP tool descriptions and leaves built-in tools' alone", async ($, on) => {
+    world(on)
+    on('tool.describe', async ($, e) => ({ description: e.description }))
+    const mcp = await $.tool.describe({ tool: 'mcp__notes__search', description: 'Search notes about Teotihuacan', provider: { plugin: 'mcp:notes', tier: 'user' } } as never)
+    expect(mcp.description.includes('Teotihuacan')).toBe(false)
+    const bash = await $.tool.describe({ tool: 'Bash', description: 'Runs a command. Teotihuacan', provider: { plugin: 'engine', tier: 'core' } } as never)
+    expect(bash.description).toBe('Runs a command. Teotihuacan')
+  })
 })
 
 describe('packs', () => {

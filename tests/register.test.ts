@@ -226,13 +226,12 @@ describe('context', () => {
     expect(r.context?.join('\n')).toMatch(/1 hidden term was replaced/)
   })
 
-  test('rewrites a system prompt section', async ($, on) => {
+  test('never changes the system prompt', async ($, on) => {
     world(on)
-    on('prompt.section', async () => ({ text: '- [Teotihuacan notes](notes.md)\n- [secret-repo plan](plan.md)\n- [Groceries](g.md)\n' }))
+    const section = '- [Teotihuacan notes](notes.md)\n- [secret-repo plan](plan.md)\n'
+    on('prompt.section', async () => ({ text: section }))
     const r = await $.prompt.section({ name: 'memory', text: null })
-    expect(r.text?.includes('Teotihuacan')).toBe(false)
-    expect(r.text?.includes('secret-repo')).toBe(false)
-    expect(r.text?.endsWith('- [Groceries](g.md)\n')).toBe(true)
+    expect(r.text).toBe(section)
   })
 
   test('rewrites CLAUDE.md and adds the explainer block', async ($, on) => {
@@ -248,6 +247,61 @@ describe('context', () => {
     on('prompt.attachment', async () => ({ text: 'Contents of notes.md: Teotihuacan' }))
     const r = await $.prompt.attachment({ type: 'file', text: 'x', origin: { kind: 'engine' } as never })
     expect(r.text?.includes('Teotihuacan')).toBe(false)
+  })
+
+  test("rewrites a settings hook's context", async ($, on) => {
+    world(on)
+    on('prompt.attachment', async () => ({ text: 'Hook says: Teotihuacan' }))
+    const r = await $.prompt.attachment({ type: 'hook_additional_context', text: 'x', origin: { kind: 'hook', event: 'SessionStart' } as never })
+    expect(r.text?.includes('Teotihuacan')).toBe(false)
+  })
+
+  test("leaves Claude Code's own reminders unchanged", async ($, on) => {
+    world(on)
+    const reminder = 'Plan mode is on. Teotihuacan'
+    on('prompt.attachment', async () => ({ text: reminder }))
+    const r = await $.prompt.attachment({ type: 'plan_mode', text: 'x', origin: { kind: 'engine' } as never })
+    expect(r.text).toBe(reminder)
+  })
+
+  test("a failure drops a filtered attachment and leaves Claude Code's own reminder", async ($, on) => {
+    world(on)
+    on('prompt.attachment', async () => {
+      throw new Error('boom')
+    })
+    const file = await $.prompt.attachment({ type: 'file', text: 'x', origin: { kind: 'engine' } as never })
+    expect(file.text).toBeNull()
+    // For a reminder the mod stands aside: the failure beneath is not turned into a drop.
+    let reason = ''
+    try {
+      await $.prompt.attachment({ type: 'plan_mode', text: 'Plan mode is on.', origin: { kind: 'engine' } as never })
+    } catch (error) {
+      reason = String(error)
+    }
+    expect(reason).toMatch(/prompt\.attachment/)
+  })
+
+  test('a failure on a tool description is not turned into a withheld description', async ($, on) => {
+    world(on)
+    on('tool.describe', async () => {
+      throw new Error('boom')
+    })
+    let reason = ''
+    try {
+      await $.tool.describe({ tool: 'mcp__notes__search', description: 'Search notes', provider: { plugin: 'mcp:notes', tier: 'user' } } as never)
+    } catch (error) {
+      reason = String(error)
+    }
+    expect(reason).toMatch(/tool\.describe/)
+  })
+
+  test("filters MCP tool descriptions and leaves built-in tools' alone", async ($, on) => {
+    world(on)
+    on('tool.describe', async ($, e) => ({ description: e.description }))
+    const mcp = await $.tool.describe({ tool: 'mcp__notes__search', description: 'Search notes about Teotihuacan', provider: { plugin: 'mcp:notes', tier: 'user' } } as never)
+    expect(mcp.description.includes('Teotihuacan')).toBe(false)
+    const bash = await $.tool.describe({ tool: 'Bash', description: 'Runs a command. Teotihuacan', provider: { plugin: 'engine', tier: 'core' } } as never)
+    expect(bash.description).toBe('Runs a command. Teotihuacan')
   })
 })
 
@@ -333,17 +387,17 @@ describe('/topic-filter log', () => {
   test('lists what was hidden and where, to the person only', async ($, on) => {
     const shown = world(on)
     tools(on)
-    on('prompt.section', async () => ({ text: 'Notes on Teotihuacan' }))
+    on('prompt.context', async ($, e) => ({ blocks: e.blocks }))
     await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
-    await $.prompt.section({ name: 'memory', text: null })
-    await $.prompt.section({ name: 'memory', text: null })
+    await $.prompt.context({ blocks: [{ name: 'claudeMd', text: 'Notes on Teotihuacan' }] })
+    await $.prompt.context({ blocks: [{ name: 'claudeMd', text: 'Notes on Teotihuacan' }] })
 
     const r = await $.command.run({ command: 'topic-filter', args: 'log' } as never)
     expect(r.text).toBeUndefined()
     const text = shown.logs.join('\n')
     expect(text).toMatch(/ {2}Bash gh repo list\n {6}Teotihuacan -> [A-Z][a-z]+\d* \(x1\)\n {6}1 line dropped by "repos": secret-repo \(x1\)/)
     // Filtered twice, listed once.
-    expect(text).toMatch(/ {2}System prompt section memory\n {6}Teotihuacan -> \S+ \(x1\)\n/)
+    expect(text).toMatch(/ {2}Context block claudeMd\n {6}Teotihuacan -> \S+ \(x1\)\n/)
     expect(text.includes('Hidden\tprivate')).toBe(false)
     expect(shown.logs.at(-1)).toBe('(Shown to you only; Claude does not see this.)')
   })

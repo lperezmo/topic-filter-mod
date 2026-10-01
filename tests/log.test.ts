@@ -75,24 +75,24 @@ describe('the log', () => {
 
   test('a source filtered again whole replaces its entry, and goes when nothing is hidden', () => {
     const log = new HiddenLog()
-    log.record('System prompt section memory', pass('Teotihuacan'), 'standing')
-    log.record('System prompt section memory', pass('Teotihuacan'), 'standing')
+    log.record('Context block claudeMd', pass('Teotihuacan'), 'standing')
+    log.record('Context block claudeMd', pass('Teotihuacan'), 'standing')
     expect(log.lines().join('\n')).toMatch(/\(x1\)/)
-    log.record('System prompt section memory', pass('nothing here'), 'standing')
+    log.record('Context block claudeMd', pass('nothing here'), 'standing')
     expect(log.lines()).toEqual(['Nothing has been hidden this session yet.'])
   })
 
   test('what stands in every request is listed apart, outlives the cap, and survives clear', () => {
     const log = new HiddenLog()
-    log.record('System prompt section memory', pass('Teotihuacan'), 'standing')
+    log.record('Context block claudeMd', pass('Teotihuacan'), 'standing')
     for (let i = 0; i < 205; i++) log.record(`Read ${i}.md`, pass('Teotihuacan'))
     expect(log.lines().slice(0, 2)).toEqual([
-      'Hidden in what Claude reads with every request (system prompt, CLAUDE.md):',
-      '  System prompt section memory',
+      'Hidden in what Claude reads with every request (CLAUDE.md, context blocks):',
+      '  Context block claudeMd',
     ])
     log.clear()
     const after = log.lines()
-    expect(after.includes('  System prompt section memory')).toBe(true)
+    expect(after.includes('  Context block claudeMd')).toBe(true)
     expect(after.includes('Hidden as it came in (most recent last):')).toBe(false)
   })
 

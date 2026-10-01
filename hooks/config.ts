@@ -74,11 +74,16 @@ function parseList(list: unknown, i: number): ListConfig {
     throw new ConfigError(`${at}.pack must be a pack name (lowercase letters, digits, hyphens)`)
   }
 
+  const restore = flag(list.restore, false, `${at}.restore`)
+  // Restore writes real terms into tool input; it is for the person's own
+  // names, never for a topic pack.
+  if (restore && pack !== undefined) throw new ConfigError(`${at}.restore is not allowed on a list that uses a pack`)
+
   return {
     name: typeof list.name === 'string' ? list.name : `list ${i + 1}`,
     mode: oneOf(list.mode, ['replace', 'drop-line'] as const, 'replace', `${at}.mode`),
     match: oneOf(list.match, ['word', 'substring'] as const, 'word', `${at}.match`),
-    restore: flag(list.restore, false, `${at}.restore`),
+    restore,
     terms: strings(list.terms, `${at}.terms`),
     pack,
     exclude: strings(list.exclude, `${at}.exclude`),
@@ -93,7 +98,6 @@ export const PACK_OPTIONS: Readonly<Record<string, string>> = {
   hideAnthropology: 'anthropology',
   hideBiology: 'biology',
   hideChemistry: 'chemistry',
-  hideCybersecurity: 'cybersecurity',
   hideGenetics: 'genetics',
 }
 
@@ -168,11 +172,11 @@ export function closestName(name: string, candidates: readonly string[]): string
 function editDistance(a: string, b: string): number {
   let row = Array.from({ length: b.length + 1 }, (_, j) => j)
   for (let i = 1; i <= a.length; i += 1) {
-    const next = [i]
+    const cur = [i]
     for (let j = 1; j <= b.length; j += 1) {
-      next[j] = Math.min(row[j]! + 1, next[j - 1]! + 1, row[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1))
+      cur[j] = Math.min(row[j]! + 1, cur[j - 1]! + 1, row[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1))
     }
-    row = next
+    row = cur
   }
   return row[b.length]!
 }

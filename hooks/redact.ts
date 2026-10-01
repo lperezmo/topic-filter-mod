@@ -79,6 +79,8 @@ export class Filter {
   private readonly listNames: readonly string[]
   /** How many terms were too short to use. */
   readonly skippedTerms: number
+  /** How many distinct terms are active. */
+  readonly termCount: number
 
   /**
    * @param config the parsed topics file
@@ -117,6 +119,7 @@ export class Filter {
     this.skippedTerms = skipped
 
     for (const ref of refs) this.matcher.add(ref)
+    this.termCount = this.matcher.size()
 
     const folded = refs.map(r => r.folded)
     const names = assignPlaceholders(folded, config.placeholder, salt, {
@@ -135,11 +138,6 @@ export class Filter {
       restoreOnly.set(name, (restoreOnly.get(name) ?? true) && isRestore)
     }
     for (const [name, isRestore] of restoreOnly) (isRestore ? this.restorable : this.guarded).add(name)
-  }
-
-  /** How many distinct terms are active. */
-  get termCount(): number {
-    return this.matcher.size
   }
 
   /** Whether `text` holds any listed term. */

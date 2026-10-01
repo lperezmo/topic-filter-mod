@@ -20,30 +20,21 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        # 2.1.277 is the oldest release with the prompt.attachment event the
-        # mod registers; earlier ones refuse to load it.
-        claude: ["2.1.277", "2.1.280", "latest"]
+        # 2.1.287 is the first release where mods load by default.
+        claude: ["2.1.287", "latest"]
         include:
           - os: windows-latest
             claude: latest
     env:
       DISABLE_AUTOUPDATER: "1"
-      # Mods are early access; without this `plugin test` refuses to run.
-      CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: "1"
     steps:
       - uses: actions/checkout@v4
-      # The native installer from the quickstart, pinned to the matrix version.
-      - name: Install Claude Code ${{ matrix.claude }} (Linux)
-        if: runner.os != 'Windows'
-        run: |
-          curl -fsSL https://claude.ai/install.sh | bash -s ${{ matrix.claude }}
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Install Claude Code ${{ matrix.claude }} (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          & ([scriptblock]::Create((irm https://claude.ai/install.ps1))) ${{ matrix.claude }}
-          Join-Path $env:USERPROFILE '.local/bin' | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # From npm, pinned to the matrix version.
+      - name: Install Claude Code ${{ matrix.claude }}
+        run: npm install -g @anthropic-ai/claude-code@${{ matrix.claude }}
       - run: claude --version
       - name: Validate manifests
         run: |

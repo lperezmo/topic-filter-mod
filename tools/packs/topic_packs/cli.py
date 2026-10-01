@@ -6,11 +6,9 @@ human reviews them, and never to stdout.
 """
 
 import argparse
-import os
 import sys
+from getpass import getpass
 from pathlib import Path
-
-from dotenv import load_dotenv
 
 from topic_packs.build import build, write_pack
 from topic_packs.judge import BATCH_SIZE, Jev
@@ -21,7 +19,6 @@ from topic_packs.sources import WIKIPEDIA_API, WIKTIONARY_API, FetchError, Http,
 TOOL_DIR = Path(__file__).resolve().parents[1]
 REPO_DIR = TOOL_DIR.parents[1]
 CACHE_DIR = TOOL_DIR / ".cache"
-DEFAULT_ENV_FILE = Path(r"D:\Python\jev-test\.env")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -35,7 +32,6 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--exclude", type=Path, action="append", default=[], help="path the dry run skips")
     b.add_argument("--judge", choices=["jev"], help="settle the review list with a judge")
     b.add_argument("--judge-batch", type=int, default=BATCH_SIZE, help="questions per judge request")
-    b.add_argument("--env-file", type=Path, default=DEFAULT_ENV_FILE, help="where OPENROUTER_API_KEY lives")
     b.add_argument("--refresh", action="store_true", help="refetch sources instead of using the cache")
     b.add_argument("--offline", action="store_true", help="use cached responses only")
     b.add_argument("--out", type=Path, help="pack file (default: packs/<name>.json in the repo)")
@@ -68,12 +64,11 @@ def _categories(args: argparse.Namespace) -> int:
 def _judge(args: argparse.Namespace, description: str) -> Jev | None:
     if args.judge != "jev":
         return None
-    key = os.environ.get("OPENROUTER_API_KEY")
-    if not key and args.env_file.exists():
-        load_dotenv(args.env_file)
-        key = os.environ.get("OPENROUTER_API_KEY")
+    # Asked for at the prompt, never read from the environment or a file: the
+    # tool ships inside the plugin, and a plugin must not pick up credentials.
+    key = getpass("OpenRouter API key for the judge (empty to build without it): ").strip()
     if not key:
-        print("judge: no OPENROUTER_API_KEY in the environment or --env-file; building without it")
+        print("judge: no key given; building without it")
         return None
     return Jev(description, key, CACHE_DIR / "judge.json", batch_size=args.judge_batch)
 

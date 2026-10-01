@@ -35,6 +35,8 @@ extra_terms = [
 extra_hints = ["archaeologist", "anthropologist", "ethnographer", "ruins", "dig site"]
 
 exclude = [
+  "dig",
+  "digging",
   "Ake",
   "akh",
   "Apu",

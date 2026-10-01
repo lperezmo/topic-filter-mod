@@ -103,8 +103,10 @@ question: does it, as found in a developer's code, notes or command output,
 most likely refer to the topic? At 0.7 or above it becomes a term, at 0.3 or
 below a hint; in between it stays a hint marked "needs a human" in the report.
 
-The key comes from `OPENROUTER_API_KEY`, or from `--env-file` (default
-`D:\Python\jev-test\.env`) at run time. Questions go 20 to a request
+The tool asks for your OpenRouter key at the prompt (not echoed) and keeps
+it only for that run. It never reads the environment or a `.env` file: this
+script ships inside the plugin, and a plugin must not pick up credentials.
+Leave the prompt empty to build without the judge. Questions go 20 to a request
 (`--judge-batch`; tested to 200, but answers drift up to 0.14 past about 24).
 The anthropology pack's first build cost $0.00045 for 85 questions.
 Answers are cached by model, prompt version and wording.

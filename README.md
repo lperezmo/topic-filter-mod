@@ -29,15 +29,8 @@ prompt footer.*
 
 ## Install
 
-**1. Turn on function hooks.** They are early access. Add this to
-`~/.claude/settings.json` (merge the key into an existing `env` block if you
-have one):
-
-```json
-{ "env": { "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1" } }
-```
-
-**2. Install the plugin.** This repository is its own marketplace:
+**1. Install the plugin.** It needs Claude Code 2.1.287 or newer, where
+mods load by default. This repository is its own marketplace:
 
 ```
 claude plugin marketplace add lperezmo/topic-filter-mod
@@ -47,7 +40,7 @@ claude plugin install topic-filter@topic-filter-mod
 Or from inside Claude Code: `/plugin marketplace add lperezmo/topic-filter-mod`,
 then `/plugin install topic-filter@topic-filter-mod`.
 
-**3. Choose what to hide.** Run `/config` and type `topic-filter` to find the
+**2. Choose what to hide.** Run `/config` and type `topic-filter` to find the
 plugin's rows. Enter or Space flips a switch or edits a field:
 
 ![The /config screen listing topic-filter's rows: one switch per built-in pack, other packs, the sidebar switches and the topics file](images/hide_config.png)
@@ -70,7 +63,7 @@ What you type in either place goes to the plugin, never into the
 conversation. A change applies right away, no restart needed. To hide a repo,
 see [Hiding repositories](#hiding-repositories-without-deleting-them).
 
-**4. Restart Claude Code** once after installing: sessions that were already
+**3. Restart Claude Code** once after installing: sessions that were already
 running do not load the plugin. The prompt footer then shows a dim
 `topic-filter: M hidden` beside the other modes, `/topic-filter` shows what is set to be hidden and
 where each part comes from, and `/topic-filter log` shows what was actually
@@ -81,11 +74,10 @@ cannot express: drop-line or restore modes for your own words, several lists,
 `exclude`. Write it yourself in an editor rather than asking Claude, since it
 holds the words you are hiding. Its lists add to the settings'.
 
-> Needs Claude Code 2.1.277 or newer; older releases refuse to load the mod.
-> The stable update channel can lag behind that, so use the latest channel
-> if `claude --version` shows something older. CI runs the tests on 2.1.277,
-> 2.1.280 and the latest release, and again every week, since the function
-> hooks API may change between releases.
+> Needs Claude Code 2.1.287 or newer. The stable update channel can lag
+> behind that, so use the latest channel if `claude --version` shows
+> something older. CI runs the tests on 2.1.287 and the latest release, and
+> again every week, since the mods API may change between releases.
 
 ## Update
 
@@ -344,12 +336,23 @@ every door is hooked:
 | Skill text, tool descriptions, slash command output | `skill.prompt`, `tool.describe`, `command.run` |
 | Remote Control and peer deliveries | `session.receive` |
 
+Each of these hooks changes one thing: it replaces listed terms in the text
+with their placeholders (or drops the line, for a `drop-line` list) and
+passes everything else on unchanged. `prompt.submit` filters every prompt
+that passes through it, yours or one another plugin submits; the mod never
+submits a prompt itself.
+
 Going the other way:
 
 - **Guard.** A tool call that uses a placeholder is refused, so the model
   cannot act on what it cannot see, and never writes `Bubblegum` into a file
   where the real word was. Subagent prompts, todos and questions to you are
   exempt, since they are the model talking to itself or to you.
+- **Restore.** The one case where the mod changes a tool's input: for a list
+  with `"restore": true`, a placeholder from that list in a tool call is
+  written back as the real term before the tool runs, in any tool except the
+  exempt ones above. The tool then runs on the real word, not on what Claude
+  wrote. Without a restore list, tool input is never changed.
 - **No blind overwrites.** Once the model has read a file with something
   hidden, a whole-file `Write` to it is refused: its copy lacks what it never
   saw. `Edit` still works, and fails safely if its text spans something hidden.
@@ -388,11 +391,10 @@ Read these before relying on it.
 
 ## Troubleshooting
 
-- **No footer label, and `/topic-filter` is not a command.** Function hooks are
-  off or the session predates the install. Check that
-  `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` is `"1"` in the `env` block of
-  `~/.claude/settings.json`, then restart Claude Code. `/plugin` has an Errors
-  tab, and `claude --debug` logs why a plugin did not load.
+- **No footer label, and `/topic-filter` is not a command.** Claude Code is
+  older than 2.1.287 or the session predates the install. Update, then
+  restart Claude Code. `/plugin` has an Errors tab, and `claude --debug` logs
+  why a plugin did not load.
 - **Status says `off, nothing chosen to hide`.** Nothing is switched on. Open
   `/config` and search `topic-filter`.
 - **Status says `BLOCKING tool calls`.** A setting or the topics file has a
@@ -414,9 +416,10 @@ claude plugin validate .claude-plugin/plugin.json   # what the module hooks and 
 claude plugin test .                                 # tests/*.test.ts against the engine
 ```
 
-Types: run `/plugin-types` in a session in this folder. It writes the engine's
-declarations for your build to `.claude/types/`, which is gitignored: they are
-Anthropic's, and `claude-code-mcp.d.ts` lists your own MCP tools. Then
+Types: each time Claude Code loads the mod (`claude --plugin-dir .`), it
+writes the engine's declarations for your build to `.claude-plugin/types/`,
+which is gitignored: they are Anthropic's, and the MCP declarations list your
+own MCP tools. Then
 `tsc -p tsconfig.json` type-checks the module (`bunx -p typescript tsc -p
 tsconfig.json` if TypeScript is not installed).
 

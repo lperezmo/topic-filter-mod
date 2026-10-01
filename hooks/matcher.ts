@@ -108,7 +108,7 @@ export class Matcher {
   private count = 0
 
   /** How many distinct folded terms the matcher holds. */
-  get size(): number {
+  size(): number {
     return this.count
   }
 

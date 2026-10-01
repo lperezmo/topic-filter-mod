@@ -877,12 +877,12 @@ async function setPaused($: EngineInterface, pause: boolean, origin: string | un
     }
   }
 
-  const on =
+  const status =
     l.filter === null
       ? statusText()
       : `Filter on: ${count(l.config?.lists.length ?? 0, 'list')}, ${count(l.filter.termCount, 'term')}.`
   return {
-    lines: [was ? on : `${on} (It was not paused.)`],
+    lines: [was ? status : `${status} (It was not paused.)`],
     ...(was ? { context: 'The user turned topic-filter back on: hidden items are filtered again, and placeholders are refused in tool calls.' } : {}),
   }
 }

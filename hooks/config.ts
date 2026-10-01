@@ -93,7 +93,6 @@ export const PACK_OPTIONS: Readonly<Record<string, string>> = {
   hideAnthropology: 'anthropology',
   hideBiology: 'biology',
   hideChemistry: 'chemistry',
-  hideCybersecurity: 'cybersecurity',
   hideGenetics: 'genetics',
 }
 

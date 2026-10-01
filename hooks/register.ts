@@ -3,11 +3,12 @@
 // Every place text enters the model's context is hooked, and the listed
 // terms in it become placeholder names (or their lines are dropped) before
 // the model reads it: tool results on their way up from core, the person's
-// prompt, the system prompt's sections, the first message's context blocks
+// prompt, the first message's context blocks
 // (CLAUDE.md), injected attachments (mentioned files, reminders, classic
 // hook context), skill text, tool descriptions, slash command output and
 // deliveries from outside the session. `turn.step` carries no messages, so
-// there is no single outgoing request to filter instead.
+// there is no single outgoing request to filter instead. The system prompt
+// is never hooked or changed.
 //
 // On the way out, a tool call that uses a placeholder is refused, so the
 // model cannot act on what it cannot see and never writes a placeholder over
@@ -390,7 +391,6 @@ async function current($: EngineInterface): Promise<Loaded> {
 
   // Cached answers were computed from the old file.
   if (previous !== undefined) {
-    $.ui.invalidate('prompt.section')
     $.ui.invalidate('prompt.context')
     $.ui.invalidate('prompt.attachment')
     $.ui.invalidate('tool.describe')
@@ -407,7 +407,6 @@ async function active($: EngineInterface): Promise<Filter | null> {
 
 /** Drops what was filtered from answers the engine may have kept, after a pause or a resume. */
 function refilter($: EngineInterface): void {
-  $.ui.invalidate('prompt.section')
   $.ui.invalidate('prompt.context')
   $.ui.invalidate('prompt.attachment')
   $.ui.invalidate('tool.describe')
@@ -674,18 +673,6 @@ export function register(on: On, options: PluginOptions) {
     return instructionFiles === undefined ? { blocks } : { blocks, instructionFiles }
   }).catch(() => ({ blocks: [] }))
 
-  on('prompt.section', async ($, e, next) => {
-    const r = await next(e)
-    const f = await active($)
-    if (f === null) return r
-    const tally = newTally()
-    // A section left out now clears its entry: an empty tally does that.
-    const text = r.text === null ? null : f.text(r.text, tally)
-    counted($, tally, `System prompt section ${e.name}`, 'context', 'standing')
-    if (text === null) return r
-    return text.changed ? { text: text.value } : r
-  }).catch(() => ({ text: null }))
-
   on('prompt.attachment', async ($, e, next) => {
     const r = await next(e)
     const f = await active($)
@@ -739,7 +726,6 @@ export function register(on: On, options: PluginOptions) {
       if (arg === 'reload') {
         loaded = undefined
         await current($)
-        $.ui.invalidate('prompt.section')
         $.ui.invalidate('prompt.context')
         $.ui.invalidate('prompt.attachment')
         $.ui.invalidate('tool.describe')

@@ -6,7 +6,7 @@
 
 # topic-filter-mod
 
-Claude mod to swap words for placeholders for selected topics (like biochemistry) to avoid safety refusals from latest models.
+Code with Claude without your past life tagging along. Chosen topics become neutral placeholders before Claude reads them; nothing on disk changes.
 
 Your machine carries everything you have ever worked on: a career in
 chemistry, a thesis, old side projects, a client's name. None of it has
@@ -47,7 +47,7 @@ plugin's rows. Enter or Space flips a switch or edits a field:
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| Hide anthropology, biology, chemistry, cybersecurity, genetics | off | One switch per [built-in pack](#topic-packs) |
+| Hide anthropology, biology, chemistry, genetics | off | One switch per [built-in pack](#topic-packs) |
 | Other packs | empty | Names of [your own packs](#topic-packs), comma-separated |
 | Sidebar | off | Opens [the sidebar](#the-sidebar) at every start |
 | Sidebar: counts only | off | The sidebar shows counts by list, never a word or file name |
@@ -120,7 +120,7 @@ real terms, the placeholder each became, and how many lines each drop-line
 term removed. The dropped lines themselves are not shown.
 
 ```
-Hidden in what Claude reads with every request (system prompt, CLAUDE.md):
+Hidden in what Claude reads with every request (CLAUDE.md, context blocks):
   C:/work/CLAUDE.md
       Teotihuacan -> Marzipan (x1)
 Hidden as it came in (most recent last):
@@ -280,7 +280,6 @@ Claude only hears that the settings have a problem, not which pack.
 | `anthropology` | 2,167 | Ancient Mesoamerican, Andean and Egyptian sites, civilizations, rulers and deities; anthropology and archaeology vocabulary |
 | `biology` | 270 | Molecular biology techniques, cellular processes, anatomical terms |
 | `chemistry` | 940 | Chemical elements, named reactions, functional groups, laboratory equipment |
-| `cybersecurity` | 312 | Named malware, computer worms and hacker groups; security and cryptography vocabulary |
 | `genetics` | 2,591 | Genetic disorders and syndromes; genetics and heredity vocabulary |
 
 They are built by the script in [`tools/packs/`](tools/packs) from Wikipedia
@@ -316,7 +315,7 @@ instead):
 ```
 
 Each one vanishes from `gh repo list`, `gh api` JSON, GitHub MCP results,
-paths, file contents and memory. Take the name out to bring it back. The
+paths and file contents. Take the name out to bring it back. The
 topics file is guarded, so the list of hidden names never enters the
 transcript.
 
@@ -331,14 +330,14 @@ every door is hooked:
 | Tool results: Bash, Read, Grep, Glob, WebFetch, MCP tools, subagent answers, errors | `tool.call`, on the way up |
 | Your typed prompt | `prompt.submit` |
 | CLAUDE.md and the other first-message context blocks | `prompt.context` |
-| System prompt sections, memory included | `prompt.section` |
 | Mentioned files, reminders, context added by classic hooks | `prompt.attachment` |
 | Skill text, tool descriptions, slash command output | `skill.prompt`, `tool.describe`, `command.run` |
 | Remote Control and peer deliveries | `session.receive` |
 
 Each of these hooks changes one thing: it replaces listed terms in the text
 with their placeholders (or drops the line, for a `drop-line` list) and
-passes everything else on unchanged. `prompt.submit` filters every prompt
+passes everything else on unchanged. The system prompt is never hooked
+or changed. `prompt.submit` filters every prompt
 that passes through it, yours or one another plugin submits; the mod never
 submits a prompt itself.
 
@@ -385,6 +384,10 @@ Read these before relying on it.
   on disk holds the text as typed.
 - **Shell rewrites of filtered files are not caught.** `cat > notes.md` built
   from a filtered read loses the hidden lines. Only `Write` is refused.
+- **The system prompt is left as it is.** The mod never hooks or changes
+  it, so what Claude Code puts there, such as your memory index (`MEMORY.md`),
+  reaches the model unfiltered. Memory files Claude reads with a tool are
+  filtered like any other file.
 - **Sessions from before the mod was on** already hold the raw terms.
 - **Other plugins** that hook `tool.call` beneath this one see raw results.
 - **Your settings are readable.** The pack switches and pack names you set

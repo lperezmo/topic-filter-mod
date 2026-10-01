@@ -34,7 +34,7 @@ export function label(text: string): string {
  *   the same text (an attachment asked again after a reload); it replaces the
  *   last one, and a pass that hid nothing removes the entry.
  * - `standing`: like `replace`, for text in every request of the session (a
- *   system prompt section, CLAUDE.md). Kept apart, never forgotten to the
+ *   CLAUDE.md and the other context blocks). Kept apart, never forgotten to the
  *   cap, and kept by `clear`, since the engine may not filter it again.
  */
 export type LogMode = 'add' | 'replace' | 'standing'
@@ -134,7 +134,7 @@ export class HiddenLog {
       hits.set(term, had === undefined ? { ...hit } : { ...hit, replaced: had.replaced + hit.replaced, dropped: had.dropped + hit.dropped })
     }
     // A pass that only repeats what a standing or replaced source already
-    // hid (the same system prompt, every request) is not news: it keeps its
+    // hid (the same CLAUDE.md, every request) is not news: it keeps its
     // time and stays out of the feed.
     const isNew = mode === 'add' || previous === undefined
     const at = isNew ? this.now() : previous.at
@@ -172,7 +172,7 @@ export class HiddenLog {
 
     const lines: string[] = []
     if (this.standing.size > 0) {
-      lines.push('Hidden in what Claude reads with every request (system prompt, CLAUDE.md):')
+      lines.push('Hidden in what Claude reads with every request (CLAUDE.md, context blocks):')
       for (const entry of this.standing.values()) lines.push(...entryLines(entry))
     }
     if (this.forgotten > 0) lines.push(`(${plural(this.forgotten, 'older source')} not shown)`)

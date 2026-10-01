@@ -1,7 +1,7 @@
 {
   "name": "topic-filter",
-  "version": "0.6.3",
-  "description": "Keep unrelated topics from pulling Claude off your code: listed terms become stable placeholder names (or their lines are dropped) in tool output, prompts, CLAUDE.md, memory and skills before the model reads them.",
+  "version": "0.7.0",
+  "description": "Keep unrelated topics from pulling Claude off your code: listed terms become stable placeholder names (or their lines are dropped) in tool output, prompts, CLAUDE.md and skills before the model reads them. The system prompt is never changed.",
   "author": {
     "name": "Luis Perez Morales",
     "url": "https://github.com/lperezmo"
@@ -34,12 +34,6 @@
       "type": "boolean",
       "title": "Hide chemistry",
       "description": "The built-in chemistry pack: chemical elements, named reactions, functional groups and laboratory equipment. Easiest in /config (Enter flips it); on the /plugin screen, type true or false.",
-      "default": false
-    },
-    "hideCybersecurity": {
-      "type": "boolean",
-      "title": "Hide cybersecurity",
-      "description": "The built-in cybersecurity pack: named malware, worms and hacker groups, and security vocabulary. Easiest in /config (Enter flips it); on the /plugin screen, type true or false.",
       "default": false
     },
     "hideGenetics": {

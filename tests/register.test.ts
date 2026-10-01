@@ -226,13 +226,12 @@ describe('context', () => {
     expect(r.context?.join('\n')).toMatch(/1 hidden term was replaced/)
   })
 
-  test('rewrites a system prompt section', async ($, on) => {
+  test('never changes the system prompt', async ($, on) => {
     world(on)
-    on('prompt.section', async () => ({ text: '- [Teotihuacan notes](notes.md)\n- [secret-repo plan](plan.md)\n- [Groceries](g.md)\n' }))
+    const section = '- [Teotihuacan notes](notes.md)\n- [secret-repo plan](plan.md)\n'
+    on('prompt.section', async () => ({ text: section }))
     const r = await $.prompt.section({ name: 'memory', text: null })
-    expect(r.text?.includes('Teotihuacan')).toBe(false)
-    expect(r.text?.includes('secret-repo')).toBe(false)
-    expect(r.text?.endsWith('- [Groceries](g.md)\n')).toBe(true)
+    expect(r.text).toBe(section)
   })
 
   test('rewrites CLAUDE.md and adds the explainer block', async ($, on) => {
@@ -333,17 +332,17 @@ describe('/topic-filter log', () => {
   test('lists what was hidden and where, to the person only', async ($, on) => {
     const shown = world(on)
     tools(on)
-    on('prompt.section', async () => ({ text: 'Notes on Teotihuacan' }))
+    on('prompt.context', async ($, e) => ({ blocks: e.blocks }))
     await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
-    await $.prompt.section({ name: 'memory', text: null })
-    await $.prompt.section({ name: 'memory', text: null })
+    await $.prompt.context({ blocks: [{ name: 'claudeMd', text: 'Notes on Teotihuacan' }] })
+    await $.prompt.context({ blocks: [{ name: 'claudeMd', text: 'Notes on Teotihuacan' }] })
 
     const r = await $.command.run({ command: 'topic-filter', args: 'log' } as never)
     expect(r.text).toBeUndefined()
     const text = shown.logs.join('\n')
     expect(text).toMatch(/ {2}Bash gh repo list\n {6}Teotihuacan -> [A-Z][a-z]+\d* \(x1\)\n {6}1 line dropped by "repos": secret-repo \(x1\)/)
     // Filtered twice, listed once.
-    expect(text).toMatch(/ {2}System prompt section memory\n {6}Teotihuacan -> \S+ \(x1\)\n/)
+    expect(text).toMatch(/ {2}Context block claudeMd\n {6}Teotihuacan -> \S+ \(x1\)\n/)
     expect(text.includes('Hidden\tprivate')).toBe(false)
     expect(shown.logs.at(-1)).toBe('(Shown to you only; Claude does not see this.)')
   })

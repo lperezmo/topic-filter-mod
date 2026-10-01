@@ -84,13 +84,13 @@ export class Filter {
 
   /**
    * @param config the parsed topics file
-   * @param salt this machine's salt for placeholder names
+   * @param seed this machine's seed for placeholder names
    * @param packTerms a pack's terms per list index, always matched as whole words: thousands of
    *   terms matched inside words would hide text everywhere
    */
   constructor(
     config: Config,
-    salt: string,
+    seed: string,
     packTerms: ReadonlyMap<number, readonly string[]> = new Map(),
   ) {
     this.informModel = config.informModel
@@ -122,7 +122,7 @@ export class Filter {
     this.termCount = this.matcher.size()
 
     const folded = refs.map(r => r.folded)
-    const names = assignPlaceholders(folded, config.placeholder, salt, {
+    const names = assignPlaceholders(folded, config.placeholder, seed, {
       equal: new Set(folded),
       contain: refs.filter(r => !r.isWordOnly).map(r => r.folded),
     })

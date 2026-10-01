@@ -13,7 +13,7 @@ const f = new Filter(
       ],
     }),
   ),
-  'test-salt-0123456789',
+  'test-seed-0123456789',
 )
 
 /** One filtering pass over `text`, as a hook would run it. */

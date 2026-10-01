@@ -60,23 +60,23 @@ describe('matcher', () => {
 })
 
 describe('placeholders', () => {
-  test('a term keeps its name for the same salt, whatever else is listed', () => {
+  test('a term keeps its name for the same seed, whatever else is listed', () => {
     const avoid = { equal: new Set<string>(), contain: [] }
-    const a = assignPlaceholders(['teotihuacan'], 'codename', 'salt-one-0123456', avoid)
-    const b = assignPlaceholders(['teotihuacan', 'chichen itza'], 'codename', 'salt-one-0123456', avoid)
+    const a = assignPlaceholders(['teotihuacan'], 'codename', 'seed-one-0123456', avoid)
+    const b = assignPlaceholders(['teotihuacan', 'chichen itza'], 'codename', 'seed-one-0123456', avoid)
     expect(a.get('teotihuacan')).toBe(b.get('teotihuacan'))
   })
 
   test('names are distinct, and always numbered so none is a word people really write', () => {
     const terms = Array.from({ length: 600 }, (_, i) => `term${i}`)
-    const names = assignPlaceholders(terms, 'codename', 'salt', { equal: new Set(), contain: [] })
+    const names = assignPlaceholders(terms, 'codename', 'seed', { equal: new Set(), contain: [] })
     const values = [...names.values()]
     expect(new Set(values).size).toBe(600)
     for (const name of values) expect(name).toMatch(/^[A-Z][a-z]+\d+$/)
   })
 
   test('tags look like [hidden-xxxxxx]', () => {
-    const names = assignPlaceholders(['giza'], 'tag', 'salt', { equal: new Set(), contain: [] })
+    const names = assignPlaceholders(['giza'], 'tag', 'seed', { equal: new Set(), contain: [] })
     expect(names.get('giza')).toMatch(/^\[hidden-[0-9a-f]{6}\]$/)
   })
 
@@ -98,7 +98,7 @@ const CONFIG: Config = parseConfig(
   }),
 )
 
-const filter = () => new Filter(CONFIG, 'test-salt-0123456789')
+const filter = () => new Filter(CONFIG, 'test-seed-0123456789')
 
 describe('config and packs', () => {
   test('a pack name must be a plain name, never a path', () => {
@@ -121,7 +121,7 @@ describe('config and packs', () => {
 
   test("a pack's terms match whole words even in a substring list", () => {
     const config = parseConfig(JSON.stringify({ lists: [{ match: 'substring', terms: ['maya'] }] }))
-    const f = new Filter(config, 'salt-0123456789abcdef', new Map([[0, ['giza']]]))
+    const f = new Filter(config, 'seed-0123456789abcdef', new Map([[0, ['giza']]]))
     const tally = newTally()
     f.text('Mayapan and Gizamatic, then Giza', tally)
     expect(tally.replaced).toBe(2)
@@ -158,7 +158,7 @@ describe('config and packs', () => {
 
   test('exclude takes a term out of its list, by folded form', () => {
     const config = parseConfig(JSON.stringify({ lists: [{ terms: ['Teotihuacan', 'Giza'], exclude: ['TEOTIHUACÁN'] }] }))
-    const f = new Filter(config, 'salt-0123456789abcdef')
+    const f = new Filter(config, 'seed-0123456789abcdef')
     expect(f.termCount).toBe(1)
     expect(f.text('Teotihuacan and Giza', newTally()).value.startsWith('Teotihuacan and ')).toBe(true)
   })

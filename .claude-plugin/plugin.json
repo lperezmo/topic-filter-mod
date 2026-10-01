@@ -1,6 +1,6 @@
 {
   "name": "topic-filter",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Keep unrelated topics from pulling Claude off your code: listed terms become stable placeholder names (or their lines are dropped) in tool output, prompts, CLAUDE.md and skills before the model reads them. The system prompt is never changed.",
   "author": {
     "name": "Luis Perez Morales",
@@ -46,6 +46,12 @@
       "title": "Other packs",
       "description": "Comma-separated names of your own packs (the packs folder under ~/.claude/topic-filter). /topic-filter packs lists them.",
       "default": ""
+    },
+    "startPaused": {
+      "type": "boolean",
+      "title": "Start paused",
+      "description": "Every session starts with nothing hidden; /topic-filter on turns filtering on for that session. Easiest in /config (Enter flips it); on the /plugin screen, type true or false.",
+      "default": false
     },
     "showSidebar": {
       "type": "boolean",

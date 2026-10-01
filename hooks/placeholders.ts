@@ -1,8 +1,8 @@
 // Gives each hidden term the name the model reads in its place, and finds
 // those names again in what the model writes. A term's name depends only on
-// the term and this machine's salt, never on the session or on which text
+// the term and this machine's seed, never on the session or on which text
 // it turned up in, so memory files, the prompt cache and a long transcript
-// stay consistent. The salt keeps the mapping from being recomputed by
+// stay consistent. The seed keeps the mapping from being recomputed by
 // anyone who has the word list but not this machine's store.
 
 import { CODENAMES } from './codenames.ts'
@@ -39,7 +39,7 @@ export type PlaceholderHit = {
 export function assignPlaceholders(
   foldedTerms: readonly string[],
   style: PlaceholderStyle,
-  salt: string,
+  seed: string,
   avoid: { equal: ReadonlySet<string>; contain: readonly string[] },
 ): Map<string, string> {
   const names = new Map<string, string>()
@@ -47,7 +47,7 @@ export function assignPlaceholders(
   const unique = [...new Set(foldedTerms)].sort()
 
   for (const term of unique) {
-    const hash = fnv1a(`${salt}\u0000${term}`)
+    const hash = fnv1a(`${seed}\u0000${term}`)
     names.set(term, style === 'tag' ? tagFor(hash, taken) : codenameFor(hash, taken, avoid))
   }
 

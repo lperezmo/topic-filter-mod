@@ -50,6 +50,7 @@ plugin's rows. Enter or Space flips a switch or edits a field:
 | --- | --- | --- |
 | Hide anthropology, biology, chemistry, genetics | off | One switch per [built-in pack](#topic-packs) |
 | Other packs | empty | Names of [your own packs](#topic-packs), comma-separated |
+| Start paused | off | Every session starts [paused](#pausing-it); `/topic-filter on` turns it on for that session |
 | Sidebar | off | Opens [the sidebar](#the-sidebar) at every start |
 | Sidebar: counts only | off | The sidebar shows counts by list, never a word or file name |
 | Extra words to hide | empty | Comma-separated words or names; kept in secure storage, not in `settings.json` |
@@ -98,6 +99,12 @@ unless you turn that on. Pick one:
 Either way, restart Claude Code afterwards; running sessions keep the old
 version. `claude plugin list` shows the version you have. Updates never touch
 your topics file or your own packs in `~/.claude/topic-filter/`.
+
+**Upgrading to 0.8.0.**
+
+- Placeholder names are drawn from a new random seed, so every term gets a
+  new codename once. Sessions started before the upgrade keep the old ones.
+- New **Start paused** setting, off by default.
 
 **Upgrading to 0.7.0.**
 
@@ -217,7 +224,11 @@ lists and terms it resumed with.
   confirm, or run by Claude, a subagent or another plugin, it leaves the
   filter on. Anything may turn it back on.
 - **It never outlasts the session.** The pause is kept in memory only: a
-  restart, `/clear` or a reload of the plugin turns filtering back on.
+  restart, `/clear` or a reload of the plugin goes back to what the settings
+  say.
+- **Or start every session paused.** Turn on **Start paused** in `/config`
+  and nothing is hidden until you type `/topic-filter on`, which lasts for
+  that session.
 - **You can see it.** The footer label reads `topic-filter: paused` in place of
   the count, and the sidebar says so at the top.
 - **Claude is told.** Pausing and resuming each leave Claude a one-line note,
@@ -261,7 +272,7 @@ spaces, hyphens and underscores as one separator (`secret repo` also finds
 (`Mayas`, `Maya's`). Terms shorter than two characters are ignored.
 
 A term keeps the same placeholder in every session. The names are derived from
-the term and a random salt kept in the plugin's store, so memory files and the
+the term and a random seed kept in the plugin's store, so memory files and the
 prompt cache stay consistent, and the word list alone does not reveal the
 mapping.
 

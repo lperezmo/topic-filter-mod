@@ -105,11 +105,14 @@ let hiddenCount = 0
 const hiddenLog = new HiddenLog()
 
 /**
- * Whether the person paused filtering with `/topic-filter off`. Memory only:
- * a restart, /clear or a reload turns filtering back on, so a forgotten
- * pause does not outlive the session.
+ * Whether filtering is paused, by `/topic-filter off` or by the "Start
+ * paused" setting. Memory only: a restart, /clear or a reload goes back to
+ * what the setting says, so a forgotten pause does not outlive the session.
  */
 let paused = false
+
+/** Whether the person set every session to start paused. */
+const startsPaused = () => pluginOptions.startPaused === true
 
 /**
  * Who may pause: the person at this terminal's prompt. Remote Control is left
@@ -368,12 +371,12 @@ async function packListing($: EngineInterface, l: Loaded): Promise<string[]> {
   return lines
 }
 
-async function saltOf($: EngineInterface): Promise<string> {
-  const stored = await $.store.get('salt')
+async function seedOf($: EngineInterface): Promise<string> {
+  const stored = await $.store.get('seed')
   if (typeof stored === 'string' && stored.length >= 16) return stored
-  const salt = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('')
-  await $.store.set('salt', salt)
-  return salt
+  const seed = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('')
+  await $.store.set('seed', seed)
+  return seed
 }
 
 /** The filter for the topics file as it is now, read again only when it changed. */
@@ -451,7 +454,7 @@ async function build($: EngineInterface, path: string, topicsKey: string, previo
     deps = config.lists.flatMap(list => (list.pack === undefined ? [] : packPaths(home, $.plugin.root, list.pack)))
     const packs = await loadPacks($, config, home)
     const key = [topicsKey, ...(await Promise.all(deps.map(d => statKey($, d))))].join('\n')
-    const filter = new Filter(config, await saltOf($), packs.terms)
+    const filter = new Filter(config, await seedOf($), packs.terms)
     return { key, path, deps, packsUsed: packs.used, config, latest, filter }
   } catch (error) {
     const message = error instanceof ConfigError ? error.message : 'the file could not be read'
@@ -556,6 +559,7 @@ function describe(l: Loaded): string[] {
 export function register(on: On, options: PluginOptions) {
   configured = typeof options.configPath === 'string' ? options.configPath.trim() : ''
   pluginOptions = options
+  paused = startsPaused()
 
   on('session.start', async ($, e, next) => {
     try {
@@ -574,10 +578,10 @@ export function register(on: On, options: PluginOptions) {
     return next(e)
   })
 
-  // A pause lasts one session: /clear ends it too.
+  // A pause lasts one session: /clear starts the next as the setting says.
   on('session.end', async ($, e, next) => {
-    if (paused) {
-      paused = false
+    if (paused !== startsPaused()) {
+      paused = startsPaused()
       refilter($)
     }
     return next(e)

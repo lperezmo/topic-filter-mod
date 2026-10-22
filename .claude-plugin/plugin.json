@@ -12,13 +12,7 @@
   "supportUrl": "https://github.com/lperezmo/topic-filter-mod/issues",
   "privacyPolicyUrl": "https://github.com/lperezmo/topic-filter-mod/blob/main/PRIVACY.md",
   "license": "GPL-3.0-only",
-  "keywords": [
-    "mod",
-    "function-hooks",
-    "focus",
-    "placeholders",
-    "productivity"
-  ],
+  "keywords": ["mod", "function-hooks", "focus", "placeholders", "productivity"],
   "userConfig": {
     "hideAnthropology": {
       "type": "boolean",

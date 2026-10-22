@@ -20,7 +20,16 @@
 
 import type { AgentInfo, EngineInterface, FsEntry, On, PluginOptions, ToolCallResult } from 'claude-code'
 
-import { closestName, ConfigError, optionLists, parseConfig, parsePack, SLUG, type Config, type Pack } from './config.ts'
+import {
+  closestName,
+  ConfigError,
+  optionLists,
+  parseConfig,
+  parsePack,
+  SLUG,
+  type Config,
+  type Pack,
+} from './config.ts'
 import { HiddenLog, type LogMode, type SourceKind } from './log.ts'
 import { fnv1a } from './placeholders.ts'
 import { openRows, SIDEBAR_ID, sidebarView, type Depth, type SidebarView } from './sidebar.tsx'
@@ -149,7 +158,7 @@ const agentLabel = (info: AgentInfo) => info.name ?? (info.description.trim() ==
 /** Every subagent's label by id; empty when they cannot be listed. */
 async function agentLabels($: EngineInterface): Promise<Map<string, string>> {
   try {
-    return new Map((await $.agent.list()).map(info => [info.id, agentLabel(info)]))
+    return new Map((await $.agent.list()).map((info) => [info.id, agentLabel(info)]))
   } catch {
     return new Map()
   }
@@ -198,7 +207,7 @@ const filteredFiles = new Set<string>()
 const pathKey = (path: string) => path.replace(/\\/g, '/').toLowerCase()
 
 /** Whether what the model read lacks something a whole-file rewrite would lose. */
-const hidesContent = (f: Filter, seen: Tally) => seen.dropped > 0 || [...seen.names].some(name => f.guarded.has(name))
+const hidesContent = (f: Filter, seen: Tally) => seen.dropped > 0 || [...seen.names].some((name) => f.guarded.has(name))
 
 async function homeOf($: EngineInterface): Promise<string> {
   // USERPROFILE first: on Windows it is where Claude Code keeps ~/.claude,
@@ -264,7 +273,7 @@ async function loadPacks(
       try {
         text = await $.fs.read(builtIn)
       } catch {
-        const names = [...new Set((await findPacks($, home)).map(entry => entry.name))]
+        const names = [...new Set((await findPacks($, home)).map((entry) => entry.name))]
         const where = list.setting === undefined ? `lists[${i}]` : `the ${list.setting} setting`
         throw new ConfigError(missingPack(list.pack, where, names))
       }
@@ -286,7 +295,7 @@ function missingPack(name: string, where: string, available: readonly string[]):
     available.length === 0 ? 'No packs are installed.' : `Available: ${available.join(', ')}.`,
     `Run /topic-filter packs to see what each covers, or make your own at ~/${USER_PACKS}/${name}.json.`,
   ]
-    .filter(part => part !== '')
+    .filter((part) => part !== '')
     .join(' ')
 }
 
@@ -362,7 +371,7 @@ async function packListing($: EngineInterface, l: Loaded): Promise<string[]> {
   }
   if (entries.length === 0) lines.push('  none installed')
 
-  const names = new Set(entries.map(entry => entry.name))
+  const names = new Set(entries.map((entry) => entry.name))
   for (const [name, lists] of users) {
     if (!names.has(name)) lines.push(`  ${name}: NOT FOUND, named by ${lists.join(', ')}`)
   }
@@ -374,7 +383,7 @@ async function packListing($: EngineInterface, l: Loaded): Promise<string[]> {
 async function seedOf($: EngineInterface): Promise<string> {
   const stored = await $.store.get('seed')
   if (typeof stored === 'string' && stored.length >= 16) return stored
-  const seed = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('')
+  const seed = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('')
   await $.store.set('seed', seed)
   return seed
 }
@@ -388,7 +397,7 @@ async function current($: EngineInterface): Promise<Loaded> {
   const path = await pathOf($)
   const topicsKey = await statKey($, path)
   const deps = loaded?.path === path ? loaded.deps : []
-  const key = [topicsKey, ...(await Promise.all(deps.map(d => statKey($, d))))].join('\n')
+  const key = [topicsKey, ...(await Promise.all(deps.map((d) => statKey($, d))))].join('\n')
   checkedAt = Date.now()
 
   if (loaded?.key === key) return loaded
@@ -433,7 +442,12 @@ function refilter($: EngineInterface): void {
   showStatus($)
 }
 
-async function build($: EngineInterface, path: string, topicsKey: string, previous: Loaded | undefined): Promise<Loaded> {
+async function build(
+  $: EngineInterface,
+  path: string,
+  topicsKey: string,
+  previous: Loaded | undefined,
+): Promise<Loaded> {
   const isMissing = topicsKey.endsWith('|missing')
 
   let deps: string[] = previous?.deps ?? []
@@ -446,19 +460,24 @@ async function build($: EngineInterface, path: string, topicsKey: string, previo
     if (own === null && extra.length === 0) {
       return { key: topicsKey, path, deps: [], packsUsed: new Map(), config: null, latest: null, filter: null }
     }
-    const config: Config = { placeholder: 'codename', informModel: true, ...own, lists: [...(own?.lists ?? []), ...extra] }
+    const config: Config = {
+      placeholder: 'codename',
+      informModel: true,
+      ...own,
+      lists: [...(own?.lists ?? []), ...extra],
+    }
     latest = config
     // Both places of every named pack, found or not: creating or editing
     // either one is then noticed.
     const home = await homeOf($)
-    deps = config.lists.flatMap(list => (list.pack === undefined ? [] : packPaths(home, $.plugin.root, list.pack)))
+    deps = config.lists.flatMap((list) => (list.pack === undefined ? [] : packPaths(home, $.plugin.root, list.pack)))
     const packs = await loadPacks($, config, home)
-    const key = [topicsKey, ...(await Promise.all(deps.map(d => statKey($, d))))].join('\n')
+    const key = [topicsKey, ...(await Promise.all(deps.map((d) => statKey($, d))))].join('\n')
     const filter = new Filter(config, await seedOf($), packs.terms)
     return { key, path, deps, packsUsed: packs.used, config, latest, filter }
   } catch (error) {
     const message = error instanceof ConfigError ? error.message : 'the file could not be read'
-    const key = [topicsKey, ...(await Promise.all(deps.map(d => statKey($, d))))].join('\n')
+    const key = [topicsKey, ...(await Promise.all(deps.map((d) => statKey($, d))))].join('\n')
     return {
       key,
       path,
@@ -481,9 +500,11 @@ function statusText(): string {
     return 'topic-filter: off, nothing chosen to hide. Switch on packs in /config.'
   }
   if (paused) return 'topic-filter: PAUSED, nothing is hidden. /topic-filter on resumes it.'
-  if (loaded.filter === null) return `topic-filter: BLOCKING tool calls. ${firstSentence(loaded.error ?? '')} Run /topic-filter.`
+  if (loaded.filter === null)
+    return `topic-filter: BLOCKING tool calls. ${firstSentence(loaded.error ?? '')} Run /topic-filter.`
   const base = `topic-filter: on, ${count(loaded.filter.termCount, 'term')}, ${hiddenCount} hidden`
-  if (loaded.error !== undefined) return `${base}. Using the last good settings: ${firstSentence(loaded.error)} Run /topic-filter.`
+  if (loaded.error !== undefined)
+    return `${base}. Using the last good settings: ${firstSentence(loaded.error)} Run /topic-filter.`
   return base
 }
 
@@ -534,7 +555,7 @@ function counted(
 /** The overview `/topic-filter` shows the person: every list and where its terms come from. */
 function describe(l: Loaded): string[] {
   const lines = [statusText().replace(/^topic-filter: /, 'topic-filter is '), `Topics file: ${l.path}`]
-  if (l.latest !== null && l.latest.lists.every(list => list.setting !== undefined)) {
+  if (l.latest !== null && l.latest.lists.every((list) => list.setting !== undefined)) {
     lines.push('(No topics file: everything below comes from the plugin settings in /config.)')
   }
   if (l.error !== undefined) lines.push(`Problem: ${l.error}`)
@@ -596,7 +617,9 @@ export function register(on: On, options: PluginOptions) {
     // a file the model holds a filtered copy of cannot be overwritten whole.
     // A topics file that failed to load still holds the list.
     if ((f !== null || l.error !== undefined) && mentionsPath(input, l.path)) {
-      return { deny: 'topic-filter: that path holds the list of hidden topics, which this session may not read or change.' }
+      return {
+        deny: 'topic-filter: that path holds the list of hidden topics, which this session may not read or change.',
+      }
     }
     // Edit changes only the text it names, and fails if that text spans
     // something hidden, so it stays allowed.
@@ -660,7 +683,7 @@ export function register(on: On, options: PluginOptions) {
 
     const tally = newTally()
     const text = f.text(e.text, tally, false)
-    const context = e.context?.map(c => f.text(c, tally).value).filter(c => c.length > 0)
+    const context = e.context?.map((c) => f.text(c, tally).value).filter((c) => c.length > 0)
     if (tally.replaced === 0 && tally.dropped === 0) return next(e)
 
     counted($, tally, 'Your prompt', 'prompts')
@@ -678,13 +701,13 @@ export function register(on: On, options: PluginOptions) {
     // The claudeMd block is the instruction files' text: with the files at
     // hand, it is counted and logged by file, not a second time as a block.
     const byFile = r.instructionFiles !== undefined
-    const blocks = r.blocks.map(b => {
+    const blocks = r.blocks.map((b) => {
       const tally = newTally()
       const text = f.text(b.text, tally).value
       if (!(byFile && b.name === 'claudeMd')) counted($, tally, `Context block ${b.name}`, 'context', 'standing')
       return { ...b, text }
     })
-    const instructionFiles = r.instructionFiles?.map(file => {
+    const instructionFiles = r.instructionFiles?.map((file) => {
       const tally = newTally()
       const content = f.text(file.content, tally).value
       counted($, tally, file.path, 'context', 'standing')
@@ -702,7 +725,15 @@ export function register(on: On, options: PluginOptions) {
     const text = f.text(r.text, tally)
     // An attachment has no name of its own; its text tells one from another,
     // so one asked again (after a reload) replaces its entry.
-    counted($, tally, `Attachment (${e.type})`, 'context', 'replace', `attachment:${e.type}:${fnv1a(r.text)}`, e.agentId)
+    counted(
+      $,
+      tally,
+      `Attachment (${e.type})`,
+      'context',
+      'replace',
+      `attachment:${e.type}:${fnv1a(r.text)}`,
+      e.agentId,
+    )
     if (!text.changed) return r
     return { text: text.vanished ? null : text.value }
   }).catch(($, e) => (filtersAttachment(e) ? { text: null } : undefined))
@@ -766,9 +797,11 @@ export function register(on: On, options: PluginOptions) {
         arg === 'packs'
           ? await packListing($, l)
           : arg === 'log'
-            ? hiddenLog.lines(agent => labels.get(agent) ?? agent)
+            ? hiddenLog.lines((agent) => labels.get(agent) ?? agent)
             : arg === 'log clear'
-              ? ['The log is cleared, except what Claude reads with every request. The status line count keeps its total.']
+              ? [
+                  'The log is cleared, except what Claude reads with every request. The status line count keeps its total.',
+                ]
               : arg === 'sidebar'
                 ? await toggleSidebar($)
                 : describe(l)
@@ -866,7 +899,11 @@ const RESUME_ARGS = new Set(['on', 'resume', 'start'])
  * for the model when the state changed, so it knows whether placeholders
  * are still refused.
  */
-async function setPaused($: EngineInterface, pause: boolean, origin: string | undefined): Promise<{ lines: string[]; context?: string }> {
+async function setPaused(
+  $: EngineInterface,
+  pause: boolean,
+  origin: string | undefined,
+): Promise<{ lines: string[]; context?: string }> {
   if (pause && !MAY_PAUSE.has(origin ?? '')) {
     return { lines: ['Only you can pause topic-filter, by typing /topic-filter off. It stays on.'] }
   }
@@ -883,7 +920,12 @@ async function setPaused($: EngineInterface, pause: boolean, origin: string | un
             'topic-filter paused: nothing is hidden until /topic-filter on.',
             'What Claude already read stays as it was. A restart, /clear or a reload turns it back on.',
           ],
-      ...(was ? {} : { context: 'The user paused topic-filter: tool output is no longer filtered, and placeholders are no longer refused.' }),
+      ...(was
+        ? {}
+        : {
+            context:
+              'The user paused topic-filter: tool output is no longer filtered, and placeholders are no longer refused.',
+          }),
     }
   }
 
@@ -893,13 +935,18 @@ async function setPaused($: EngineInterface, pause: boolean, origin: string | un
       : `Filter on: ${count(l.config?.lists.length ?? 0, 'list')}, ${count(l.filter.termCount, 'term')}.`
   return {
     lines: [was ? status : `${status} (It was not paused.)`],
-    ...(was ? { context: 'The user turned topic-filter back on: hidden items are filtered again, and placeholders are refused in tool calls.' } : {}),
+    ...(was
+      ? {
+          context:
+            'The user turned topic-filter back on: hidden items are filtered again, and placeholders are refused in tool calls.',
+        }
+      : {}),
   }
 }
 
 /** Opens the sidebar, or closes it when it is open; says which, for the person. */
 async function toggleSidebar($: EngineInterface): Promise<string[]> {
-  const isOpen = (await $.ui.panes()).some(pane => pane.id === SIDEBAR_ID)
+  const isOpen = (await $.ui.panes()).some((pane) => pane.id === SIDEBAR_ID)
   if (isOpen) {
     await $.ui.close({ id: SIDEBAR_ID })
     return ['Sidebar closed. /topic-filter sidebar opens it again.']
@@ -933,8 +980,8 @@ function filterResult(f: Filter, r: ToolCallResult, seen: Tally): ToolCallResult
 
   const record = f.value(r.result, newTally())
   if (typeof r.text === 'string') f.text(r.text, seen)
-  const context = r.context?.map(c => f.text(c, seen))
-  const contextChanged = context?.some(c => c.changed) ?? false
+  const context = r.context?.map((c) => f.text(c, seen))
+  const contextChanged = context?.some((c) => c.changed) ?? false
 
   if (!record.changed && !contextChanged) {
     // A term in `text` that the record does not hold came from the mapper,
@@ -944,7 +991,7 @@ function filterResult(f: Filter, r: ToolCallResult, seen: Tally): ToolCallResult
     return r
   }
 
-  const kept = (context ?? []).map(c => c.value).filter(c => c.length > 0)
+  const kept = (context ?? []).map((c) => c.value).filter((c) => c.length > 0)
   const note = f.informModel ? noteFor(seen, f.restorable) : undefined
   const all = note === undefined ? kept : [...kept, note]
   // Without `ref`, core maps the filtered record for the model afresh.
@@ -976,7 +1023,7 @@ function mentionsPath(input: Record<string, unknown>, path: string): boolean {
   const tail = full.split('/').slice(-2).join('/')
   let found = false
   const checked = Object.fromEntries(Object.entries(input).filter(([key]) => !WRITTEN_TEXT.has(key)))
-  forEachString(checked, s => {
+  forEachString(checked, (s) => {
     const n = norm(s)
     if (n.includes(full) || n.includes(tail)) found = true
   })

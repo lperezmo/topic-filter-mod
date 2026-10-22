@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
   # Weekly, so a new Claude Code release that breaks the mod shows up on its own.
   schedule:
-    - cron: "0 14 * * 1"
+    - cron: '0 14 * * 1'
 
 permissions:
   contents: read
@@ -21,12 +21,12 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         # 2.1.287 is the first release where mods load by default.
-        claude: ["2.1.287", "latest"]
+        claude: ['2.1.287', 'latest']
         include:
           - os: windows-latest
             claude: latest
     env:
-      DISABLE_AUTOUPDATER: "1"
+      DISABLE_AUTOUPDATER: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -56,3 +56,15 @@ jobs:
         with:
           src: tools/packs
       - run: uv run pytest -q
+
+  format-and-lint:
+    name: bun fmt and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # bun fmt and bun lint are canary-only until they reach a stable release.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: canary
+      - run: bun fmt --check .
+      - run: bun lint --max-warnings 0 --format github

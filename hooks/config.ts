@@ -30,8 +30,7 @@ export type Config = {
 
 export class ConfigError extends Error {}
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v)
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T, where: string): T {
   if (value === undefined) return fallback
@@ -104,13 +103,19 @@ export const PACK_OPTIONS: Readonly<Record<string, string>> = {
 /** A comma-separated option (or a list option) as its items. */
 function items(value: unknown): string[] {
   const parts = typeof value === 'string' ? value.split(',') : Array.isArray(value) ? value : []
-  return parts.filter((s): s is string => typeof s === 'string').map(s => s.trim()).filter(s => s !== '')
+  return parts
+    .filter((s): s is string => typeof s === 'string')
+    .map((s) => s.trim())
+    .filter((s) => s !== '')
 }
 
 function slugs(value: unknown, setting: string, what: string): string[] {
-  const names = items(value).map(s => s.toLowerCase())
-  const bad = names.findIndex(name => !SLUG.test(name))
-  if (bad >= 0) throw new ConfigError(`The ${setting} setting's item ${bad + 1} is not a ${what} (lowercase letters, digits, hyphens).`)
+  const names = items(value).map((s) => s.toLowerCase())
+  const bad = names.findIndex((name) => !SLUG.test(name))
+  if (bad >= 0)
+    throw new ConfigError(
+      `The ${setting} setting's item ${bad + 1} is not a ${what} (lowercase letters, digits, hyphens).`,
+    )
   return [...new Set(names)]
 }
 

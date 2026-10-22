@@ -1,0 +1,3 @@
+# Built by the Python pack builder in tools/packs, which has its own ruff checks.
+packs/
+tools/packs/

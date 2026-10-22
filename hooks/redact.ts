@@ -88,13 +88,9 @@ export class Filter {
    * @param packTerms a pack's terms per list index, always matched as whole words: thousands of
    *   terms matched inside words would hide text everywhere
    */
-  constructor(
-    config: Config,
-    seed: string,
-    packTerms: ReadonlyMap<number, readonly string[]> = new Map(),
-  ) {
+  constructor(config: Config, seed: string, packTerms: ReadonlyMap<number, readonly string[]> = new Map()) {
     this.informModel = config.informModel
-    this.listNames = config.lists.map(list => list.name)
+    this.listNames = config.lists.map((list) => list.name)
 
     const refs: TermRef[] = []
     let skipped = 0
@@ -121,10 +117,10 @@ export class Filter {
     for (const ref of refs) this.matcher.add(ref)
     this.termCount = this.matcher.size()
 
-    const folded = refs.map(r => r.folded)
+    const folded = refs.map((r) => r.folded)
     const names = assignPlaceholders(folded, config.placeholder, seed, {
       equal: new Set(folded),
-      contain: refs.filter(r => !r.isWordOnly).map(r => r.folded),
+      contain: refs.filter((r) => !r.isWordOnly).map((r) => r.folded),
     })
 
     // A term listed twice keeps its first spelling for restores, and is
@@ -154,11 +150,11 @@ export class Filter {
     if (matches.length === 0) return { value: text, changed: false, vanished: false }
 
     let out = text
-    if (allowDrop && matches.some(m => m.ref.mode === 'drop-line')) {
+    if (allowDrop && matches.some((m) => m.ref.mode === 'drop-line')) {
       // A literal `\n` ends a line too: some output prints its newlines as text.
       const lines = text.split(/(?<=\n|\\n)/)
-      const kept = lines.filter(line => {
-        const dropper = this.matcher.find(line).find(m => m.ref.mode === 'drop-line')
+      const kept = lines.filter((line) => {
+        const dropper = this.matcher.find(line).find((m) => m.ref.mode === 'drop-line')
         if (dropper !== undefined) this.hit(tally, dropper.ref).dropped += 1
         return dropper === undefined
       })
@@ -192,7 +188,13 @@ export class Filter {
   private hit(tally: Tally, ref: TermRef): Hit {
     let hit = tally.hits.get(ref.folded)
     if (hit === undefined) {
-      hit = { term: ref.canonical, placeholder: this.placeholderOf.get(ref.folded)!, list: this.listNames[ref.list]!, replaced: 0, dropped: 0 }
+      hit = {
+        term: ref.canonical,
+        placeholder: this.placeholderOf.get(ref.folded)!,
+        list: this.listNames[ref.list]!,
+        replaced: 0,
+        dropped: 0,
+      }
       tally.hits.set(ref.folded, hit)
     }
     return hit
@@ -262,7 +264,7 @@ export class Filter {
   /** The guarded placeholders `input` uses, the engine's own keys aside. */
   guardedIn(input: Record<string, unknown>): string[] {
     const found = new Set<string>()
-    forEachString(input, s => {
+    forEachString(input, (s) => {
       for (const hit of findPlaceholders(s, this.guarded)) found.add(hit.name)
     })
     return [...found]
@@ -311,7 +313,7 @@ export function forEachString(input: Record<string, unknown>, visit: (s: string)
 function mapStrings(v: unknown, f: (s: string) => string, depth = 0): unknown {
   if (depth > MAX_DEPTH) return v
   if (typeof v === 'string') return f(v)
-  if (Array.isArray(v)) return v.map(item => mapStrings(item, f, depth + 1))
+  if (Array.isArray(v)) return v.map((item) => mapStrings(item, f, depth + 1))
   if (isPlainObject(v)) {
     const out: Record<string, unknown> = {}
     for (const [key, child] of Object.entries(v)) out[key] = mapStrings(child, f, depth + 1)
@@ -330,13 +332,17 @@ export function noteFor(tally: Tally, restorable: ReadonlySet<string> = new Set(
   const parts: string[] = []
   if (tally.replaced > 0) {
     const names = [...tally.names].slice(0, 12).join(', ')
-    parts.push(`${tally.replaced} hidden term${tally.replaced === 1 ? ' was' : 's were'} replaced with placeholder names (${names})`)
+    parts.push(
+      `${tally.replaced} hidden term${tally.replaced === 1 ? ' was' : 's were'} replaced with placeholder names (${names})`,
+    )
   }
   if (tally.dropped > 0) {
-    parts.push(`${tally.dropped} line${tally.dropped === 1 ? '' : 's'} mentioning hidden items ${tally.dropped === 1 ? 'was' : 'were'} removed`)
+    parts.push(
+      `${tally.dropped} line${tally.dropped === 1 ? '' : 's'} mentioning hidden items ${tally.dropped === 1 ? 'was' : 'were'} removed`,
+    )
   }
 
-  const usable = [...tally.names].filter(name => restorable.has(name))
+  const usable = [...tally.names].filter((name) => restorable.has(name))
   const rule =
     usable.length === 0
       ? 'Mentioning a placeholder in a reply is fine, but a tool call that uses one (a command, search or file edit) is refused.'

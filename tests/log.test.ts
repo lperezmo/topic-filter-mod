@@ -26,7 +26,7 @@ function pass(text: string): Tally {
 describe('what a pass records', () => {
   test('each term with its placeholder, its list, and how often', () => {
     const tally = pass('Teotihuacan, then teotihuacán again, and the Pyramids of Giza.')
-    const hits = [...tally.hits.values()].map(h => [h.term, h.list, h.replaced, h.dropped])
+    const hits = [...tally.hits.values()].map((h) => [h.term, h.list, h.replaced, h.dropped])
     expect(hits).toEqual([
       ['Teotihuacan', 'places', 2, 0],
       ['Pyramids of Giza', 'places', 1, 0],
@@ -37,7 +37,7 @@ describe('what a pass records', () => {
   test('each dropped line once, under the first drop-line term on it', () => {
     const tally = pass('a/public\na/secret-repo and a/other-secret\na/other-secret\n')
     expect(tally.dropped).toBe(2)
-    const dropped = [...tally.hits.values()].map(h => [h.term, h.dropped])
+    const dropped = [...tally.hits.values()].map((h) => [h.term, h.dropped])
     expect(dropped).toEqual([
       ['secret-repo', 1],
       ['other-secret', 1],
@@ -68,7 +68,7 @@ describe('the log', () => {
     log.record('Read a.md', pass('Teotihuacan'))
     log.record('Read b.md', pass('Teotihuacan'))
     log.record('Read a.md', pass('Teotihuacan'))
-    const sources = log.lines().filter(line => /^ {2}\S/.test(line))
+    const sources = log.lines().filter((line) => /^ {2}\S/.test(line))
     expect(sources).toEqual(['  Read b.md', '  Read a.md'])
     expect(log.lines().join('\n')).toMatch(/Read a\.md\n\s+Teotihuacan -> \S+ \(x2\)/)
   })
@@ -137,7 +137,7 @@ describe('what the sidebar reads', () => {
     now = 2000
     log.record('Read trip.md', pass('Teotihuacan and Teotihuacan'), 'add', undefined, undefined, 'files')
     const { feed, lastAt } = log.summary()
-    expect(feed.map(item => [item.at, item.label, item.replaced, item.dropped])).toEqual([
+    expect(feed.map((item) => [item.at, item.label, item.replaced, item.dropped])).toEqual([
       [2000, 'Read trip.md', 2, 0],
       [1000, 'Bash gh repo list', 0, 1],
     ])
@@ -168,7 +168,7 @@ describe('what the sidebar reads', () => {
       { kind: 'commands', n: 1 },
     ])
     expect(s.sources).toBe(3)
-    const place = s.lists.find(list => list.list === 'places')!.hits[0]!
+    const place = s.lists.find((list) => list.list === 'places')!.hits[0]!
     expect(place.sources).toEqual([
       { label: 'Read trip.md', n: 2 },
       { label: 'Your prompt', n: 1 },
@@ -179,7 +179,7 @@ describe('what the sidebar reads', () => {
     const log = new HiddenLog(() => 0)
     log.record('Bash ls', pass('a/secret-repo\n'))
     log.record('Read plan.md', pass('Teotihuacan'), 'add', undefined, 'agent-7', 'files')
-    expect(log.summary('agent-7').feed.map(item => item.label)).toEqual(['Read plan.md'])
+    expect(log.summary('agent-7').feed.map((item) => item.label)).toEqual(['Read plan.md'])
     expect(log.summary().feed).toHaveLength(2)
     log.clear()
     expect(log.summary().feed).toEqual([])

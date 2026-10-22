@@ -20,7 +20,7 @@ const matcherOf = (...refs: TermRef[]) => {
   return m
 }
 
-const found = (m: Matcher, text: string) => m.find(text).map(x => text.slice(x.start, x.end))
+const found = (m: Matcher, text: string) => m.find(text).map((x) => text.slice(x.start, x.end))
 
 describe('matcher', () => {
   test('ignores accents and case', () => {
@@ -40,7 +40,11 @@ describe('matcher', () => {
 
   test('spaces, hyphens and underscores are one separator', () => {
     const m = matcherOf(ref('secret repo'))
-    expect(found(m, 'secret-repo secret_repo secret  repo secretrepo')).toEqual(['secret-repo', 'secret_repo', 'secret  repo'])
+    expect(found(m, 'secret-repo secret_repo secret  repo secretrepo')).toEqual([
+      'secret-repo',
+      'secret_repo',
+      'secret  repo',
+    ])
   })
 
   test('takes the longest term at a position', () => {
@@ -55,7 +59,10 @@ describe('matcher', () => {
 
   test('finds a term inside a path', () => {
     const m = matcherOf(ref('secret-repo'))
-    expect(found(m, 'D:\\Python\\secret-repo\\main.py and /home/me/secret-repo/')).toEqual(['secret-repo', 'secret-repo'])
+    expect(found(m, 'D:\\Python\\secret-repo\\main.py and /home/me/secret-repo/')).toEqual([
+      'secret-repo',
+      'secret-repo',
+    ])
   })
 })
 
@@ -83,7 +90,10 @@ describe('placeholders', () => {
   test('finds a placeholder in written text, plural included, not its plain or lower-case word', () => {
     const known = new Set(['Bubblegum7', 'Kazoo12'])
     const hits = findPlaceholders('cd Bubblegum7s && ls Kazoo12 bubblegum7, a Bubblegum and a Kazoo', known)
-    expect(hits.map(h => [h.name, h.suffix])).toEqual([['Bubblegum7', 's'], ['Kazoo12', '']])
+    expect(hits.map((h) => [h.name, h.suffix])).toEqual([
+      ['Bubblegum7', 's'],
+      ['Kazoo12', ''],
+    ])
   })
 })
 
@@ -103,7 +113,9 @@ const filter = () => new Filter(CONFIG, 'test-seed-0123456789')
 describe('config and packs', () => {
   test('a pack name must be a plain name, never a path', () => {
     expect(() => parseConfig('{"lists": [{"pack": "../secrets"}]}')).toThrow(/lists\[0\]\.pack must be a pack name/)
-    expect(() => parseConfig('{"lists": [{"pack": "demo", "restore": true}]}')).toThrow(/lists\[0\]\.restore is not allowed on a list that uses a pack/)
+    expect(() => parseConfig('{"lists": [{"pack": "demo", "restore": true}]}')).toThrow(
+      /lists\[0\]\.restore is not allowed on a list that uses a pack/,
+    )
   })
 
   test('pack errors name the pack and a position, never a term', () => {
@@ -134,13 +146,9 @@ describe('config and packs', () => {
       otherPacks: 'my-topic, chemistry',
       extraWords: ' Teotihuacan ,, Giza ',
     })
-    expect(lists.map(l => l.name)).toEqual([
-      'pack chemistry',
-      'pack my-topic',
-      'extra words',
-    ])
+    expect(lists.map((l) => l.name)).toEqual(['pack chemistry', 'pack my-topic', 'extra words'])
     expect(lists.at(-1)!.terms).toEqual(['Teotihuacan', 'Giza'])
-    expect(lists.find(l => l.pack === 'my-topic')!.setting).toBe('Other packs')
+    expect(lists.find((l) => l.pack === 'my-topic')!.setting).toBe('Other packs')
   })
 
   test('nothing chosen adds nothing, and the removed GitHub topic settings are ignored', () => {
@@ -149,7 +157,9 @@ describe('config and packs', () => {
   })
 
   test('a bad name in a setting names the setting and position, never the value', () => {
-    expect(() => optionLists({ otherPacks: 'ok, ../secrets' })).toThrow("The Other packs setting's item 2 is not a pack name")
+    expect(() => optionLists({ otherPacks: 'ok, ../secrets' })).toThrow(
+      "The Other packs setting's item 2 is not a pack name",
+    )
   })
 
   test('a pack without hints is fine', () => {
@@ -157,7 +167,9 @@ describe('config and packs', () => {
   })
 
   test('exclude takes a term out of its list, by folded form', () => {
-    const config = parseConfig(JSON.stringify({ lists: [{ terms: ['Teotihuacan', 'Giza'], exclude: ['TEOTIHUACÁN'] }] }))
+    const config = parseConfig(
+      JSON.stringify({ lists: [{ terms: ['Teotihuacan', 'Giza'], exclude: ['TEOTIHUACÁN'] }] }),
+    )
     const f = new Filter(config, 'seed-0123456789abcdef')
     expect(f.termCount).toBe(1)
     expect(f.text('Teotihuacan and Giza', newTally()).value.startsWith('Teotihuacan and ')).toBe(true)

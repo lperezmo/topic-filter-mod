@@ -69,7 +69,7 @@ function codenameFor(
     const round = Math.floor((first + c) / n)
     const name = `${CODENAMES[(first + c) % n]!}${round * 10 + digit}`
     const lower = name.toLowerCase()
-    if (taken.has(name) || avoid.equal.has(lower) || avoid.contain.some(t => lower.includes(t))) continue
+    if (taken.has(name) || avoid.equal.has(lower) || avoid.contain.some((t) => lower.includes(t))) continue
     taken.add(name)
     return name
   }

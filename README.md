@@ -24,9 +24,9 @@ disappear. Your repos, notes and memory stay as they are.
 
 ![A Claude Code session summarizing a demo project: its reply uses codenames in place of the hidden terms, while the sidebar lists each hidden term, its codename, and where the hits came from](images/live_filter.png)
 
-*Claude answers in codenames; the sidebar, shown to you only, maps each one back
+_Claude answers in codenames; the sidebar, shown to you only, maps each one back
 and counts where it was hidden. The dim `topic-filter: 50 hidden` sits in the
-prompt footer.*
+prompt footer._
 
 ## Install
 
@@ -46,15 +46,15 @@ plugin's rows. Enter or Space flips a switch or edits a field:
 
 ![The /config screen listing topic-filter's rows: one switch per built-in pack, other packs, the sidebar switches and the topics file](images/hide_config.png)
 
-| Setting | Default | What it does |
-| --- | --- | --- |
-| Hide anthropology, biology, chemistry, genetics | off | One switch per [built-in pack](#topic-packs) |
-| Other packs | empty | Names of [your own packs](#topic-packs), comma-separated |
-| Start paused | off | Every session starts [paused](#pausing-it); `/topic-filter on` turns it on for that session |
-| Sidebar | off | Opens [the sidebar](#the-sidebar) at every start |
-| Sidebar: counts only | off | The sidebar shows counts by list, never a word or file name |
-| Extra words to hide | empty | Comma-separated words or names; kept in secure storage, not in `settings.json` |
-| Topics file (advanced) | empty | Where [the topics file](#the-topics-file) lives, if you want one |
+| Setting                                         | Default | What it does                                                                                |
+| ----------------------------------------------- | ------- | ------------------------------------------------------------------------------------------- |
+| Hide anthropology, biology, chemistry, genetics | off     | One switch per [built-in pack](#topic-packs)                                                |
+| Other packs                                     | empty   | Names of [your own packs](#topic-packs), comma-separated                                    |
+| Start paused                                    | off     | Every session starts [paused](#pausing-it); `/topic-filter on` turns it on for that session |
+| Sidebar                                         | off     | Opens [the sidebar](#the-sidebar) at every start                                            |
+| Sidebar: counts only                            | off     | The sidebar shows counts by list, never a word or file name                                 |
+| Extra words to hide                             | empty   | Comma-separated words or names; kept in secure storage, not in `settings.json`              |
+| Topics file (advanced)                          | empty   | Where [the topics file](#the-topics-file) lives, if you want one                            |
 
 **Extra words to hide** is kept secret, so `/config` does not list it: set it
 in `/plugin`: Installed, then `topic-filter`, then configure it. That screen
@@ -254,17 +254,17 @@ What Claude read before the pause keeps its placeholders.
 }
 ```
 
-| Field | Default | Meaning |
-| --- | --- | --- |
-| `placeholder` | `codename` | `codename` gives each term a capitalized word and a number (`Bubblegum7`, `Kazoo12`); the number keeps it from ever matching a word you really write. `tag` gives `[hidden-3fa2c1]`. |
-| `informModel` | `true` | Tell the model that placeholders exist and how to treat them. Without it the model tends to treat `Bubblegum` as a real name and go looking for it. |
-| `lists[].name` | `list N` | A label for you. It never reaches the model. |
-| `lists[].terms` | `[]` | The terms to hide. |
-| `lists[].mode` | `replace` | `replace` swaps each term for its placeholder. `drop-line` removes every line that mentions a term; in JSON (`gh ... --json`, MCP results) the whole array item goes. A typed prompt always gets placeholders, never lost lines. |
-| `lists[].match` | `word` | `word` matches whole words only. `substring` matches inside words too (`maya` in `Mayapan`). |
-| `lists[].restore` | `false` | When the model uses this list's placeholder in a tool call, write the real term back instead of refusing. For your own names (contacts, client names) that a tool must write out exactly. Not allowed on a list that uses a `pack`. |
-| `lists[].pack` | none | A [topic pack](#topic-packs) whose terms join the list. |
-| `lists[].exclude` | `[]` | Terms to leave out of the list, whatever brought them in (a pack or `terms`). Matched the same forgiving way as terms. |
+| Field             | Default    | Meaning                                                                                                                                                                                                                             |
+| ----------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `placeholder`     | `codename` | `codename` gives each term a capitalized word and a number (`Bubblegum7`, `Kazoo12`); the number keeps it from ever matching a word you really write. `tag` gives `[hidden-3fa2c1]`.                                                |
+| `informModel`     | `true`     | Tell the model that placeholders exist and how to treat them. Without it the model tends to treat `Bubblegum` as a real name and go looking for it.                                                                                 |
+| `lists[].name`    | `list N`   | A label for you. It never reaches the model.                                                                                                                                                                                        |
+| `lists[].terms`   | `[]`       | The terms to hide.                                                                                                                                                                                                                  |
+| `lists[].mode`    | `replace`  | `replace` swaps each term for its placeholder. `drop-line` removes every line that mentions a term; in JSON (`gh ... --json`, MCP results) the whole array item goes. A typed prompt always gets placeholders, never lost lines.    |
+| `lists[].match`   | `word`     | `word` matches whole words only. `substring` matches inside words too (`maya` in `Mayapan`).                                                                                                                                        |
+| `lists[].restore` | `false`    | When the model uses this list's placeholder in a tool call, write the real term back instead of refusing. For your own names (contacts, client names) that a tool must write out exactly. Not allowed on a list that uses a `pack`. |
+| `lists[].pack`    | none       | A [topic pack](#topic-packs) whose terms join the list.                                                                                                                                                                             |
+| `lists[].exclude` | `[]`       | Terms to leave out of the list, whatever brought them in (a pack or `terms`). Matched the same forgiving way as terms.                                                                                                              |
 
 Matching ignores case and accents (`Teotihuacán` = `teotihuacan`), treats
 spaces, hyphens and underscores as one separator (`secret repo` also finds
@@ -299,12 +299,12 @@ The session is told only that the settings need attention.
 
 **Built-in packs** ship in this repository's [`packs/`](packs) folder:
 
-| Pack | Terms | Covers |
-| --- | --- | --- |
+| Pack           | Terms | Covers                                                                                                                      |
+| -------------- | ----- | --------------------------------------------------------------------------------------------------------------------------- |
 | `anthropology` | 2,167 | Ancient Mesoamerican, Andean and Egyptian sites, civilizations, rulers and deities; anthropology and archaeology vocabulary |
-| `biology` | 270 | Molecular biology techniques, cellular processes, anatomical terms |
-| `chemistry` | 940 | Chemical elements, named reactions, functional groups, laboratory equipment |
-| `genetics` | 2,591 | Genetic disorders and syndromes; genetics and heredity vocabulary |
+| `biology`      | 270   | Molecular biology techniques, cellular processes, anatomical terms                                                          |
+| `chemistry`    | 940   | Chemical elements, named reactions, functional groups, laboratory equipment                                                 |
+| `genetics`     | 2,591 | Genetic disorders and syndromes; genetics and heredity vocabulary                                                           |
 
 They are built by the script in [`tools/packs/`](tools/packs) from Wikipedia
 and Wiktionary categories, word-frequency data and a dry run against ordinary
@@ -349,14 +349,14 @@ Text reaches the model through many doors, and there is no single outgoing
 request to filter (`turn.step` carries a message count, not the messages). So
 every door but the system prompt is hooked:
 
-| What the model reads | Event |
-| --- | --- |
-| Tool results: Bash, Read, Grep, Glob, WebFetch, MCP tools, subagent answers, errors | `tool.call`, on the way up |
-| Your typed prompt | `prompt.submit` |
-| CLAUDE.md and the other first-message context blocks | `prompt.context` |
-| Mentioned and edited files, nested CLAUDE.md, queued prompts, context added by classic hooks and plugins (Claude Code's own reminders pass unchanged) | `prompt.attachment` |
-| Skill text, MCP tool descriptions (built-in tools keep theirs), slash command output | `skill.prompt`, `tool.describe`, `command.run` |
-| Remote Control and peer deliveries | `session.receive` |
+| What the model reads                                                                                                                                  | Event                                          |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Tool results: Bash, Read, Grep, Glob, WebFetch, MCP tools, subagent answers, errors                                                                   | `tool.call`, on the way up                     |
+| Your typed prompt                                                                                                                                     | `prompt.submit`                                |
+| CLAUDE.md and the other first-message context blocks                                                                                                  | `prompt.context`                               |
+| Mentioned and edited files, nested CLAUDE.md, queued prompts, context added by classic hooks and plugins (Claude Code's own reminders pass unchanged) | `prompt.attachment`                            |
+| Skill text, MCP tool descriptions (built-in tools keep theirs), slash command output                                                                  | `skill.prompt`, `tool.describe`, `command.run` |
+| Remote Control and peer deliveries                                                                                                                    | `session.receive`                              |
 
 Each of these hooks changes one thing: it replaces listed terms in the text
 with their placeholders (or drops the line, for a `drop-line` list) and

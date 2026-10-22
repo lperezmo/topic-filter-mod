@@ -118,7 +118,14 @@ export class HiddenLog {
    * sources apart when their labels could match (a long path cut short), and
    * `agent` names the subagent whose loop read it.
    */
-  record(source: string, tally: Tally, mode: LogMode = 'add', slot: string = source, agent?: string, kind: SourceKind = 'tools'): void {
+  record(
+    source: string,
+    tally: Tally,
+    mode: LogMode = 'add',
+    slot: string = source,
+    agent?: string,
+    kind: SourceKind = 'tools',
+  ): void {
     const entries = mode === 'standing' ? this.standing : this.passing
     slot = agent === undefined ? slot : `${agent}\u0000${slot}`
     const previous = entries.get(slot)
@@ -131,7 +138,12 @@ export class HiddenLog {
     for (const [term, hit] of tally.hits) {
       const had = hits.get(term)
       // The newest placeholder and list name stand: settings may have changed since.
-      hits.set(term, had === undefined ? { ...hit } : { ...hit, replaced: had.replaced + hit.replaced, dropped: had.dropped + hit.dropped })
+      hits.set(
+        term,
+        had === undefined
+          ? { ...hit }
+          : { ...hit, replaced: had.replaced + hit.replaced, dropped: had.dropped + hit.dropped },
+      )
     }
     // A pass that only repeats what a standing or replaced source already
     // hid (the same CLAUDE.md, every request) is not news: it keeps its
@@ -152,7 +164,11 @@ export class HiddenLog {
   }
 
   private remember(source: string, tally: Tally, at: number, agent?: string): void {
-    const hits = [...tally.hits.values()].map(hit => ({ list: hit.list, term: hit.term, n: hit.replaced + hit.dropped }))
+    const hits = [...tally.hits.values()].map((hit) => ({
+      list: hit.list,
+      term: hit.term,
+      n: hit.replaced + hit.dropped,
+    }))
     hits.sort((a, b) => b.n - a.n)
     const item: FeedItem = { at, label: source, replaced: tally.replaced, dropped: tally.dropped, hits }
     this.feed.push(agent === undefined ? item : { ...item, agent })
@@ -167,7 +183,7 @@ export class HiddenLog {
   }
 
   /** The log as the person reads it; `agentName` labels a subagent by its id. */
-  lines(agentName: (agent: string) => string = agent => agent): string[] {
+  lines(agentName: (agent: string) => string = (agent) => agent): string[] {
     if (this.passing.size === 0 && this.standing.size === 0) return ['Nothing has been hidden this session yet.']
 
     const lines: string[] = []
@@ -236,9 +252,14 @@ export class HiddenLog {
     for (const list of lists) list.hits.sort((a, b) => weight(b) - weight(a))
 
     const passing = [...this.passing.values()].filter(inScope)
-    const agents = [...new Set([...this.passing.values()].flatMap(entry => (entry.agent === undefined ? [] : [entry.agent])))]
-    const lastAt = entries.reduce<number | undefined>((at, entry) => (at === undefined || entry.at > at ? entry.at : at), undefined)
-    const feed = this.feed.filter(item => agent === undefined || item.agent === agent).reverse()
+    const agents = [
+      ...new Set([...this.passing.values()].flatMap((entry) => (entry.agent === undefined ? [] : [entry.agent]))),
+    ]
+    const lastAt = entries.reduce<number | undefined>(
+      (at, entry) => (at === undefined || entry.at > at ? entry.at : at),
+      undefined,
+    )
+    const feed = this.feed.filter((item) => agent === undefined || item.agent === agent).reverse()
     return {
       replaced: lists.reduce((n, list) => n + list.replaced, 0),
       dropped: lists.reduce((n, list) => n + list.dropped, 0),
@@ -259,11 +280,12 @@ function entryLines({ label, hits }: Entry): string[] {
   const lines = [`  ${label}`]
   const all = [...hits.values()]
 
-  const replaced = all.filter(hit => hit.replaced > 0).sort((a, b) => b.replaced - a.replaced)
+  const replaced = all.filter((hit) => hit.replaced > 0).sort((a, b) => b.replaced - a.replaced)
   for (const hit of replaced.slice(0, MAX_TERMS_SHOWN)) {
     lines.push(`      ${hit.term} -> ${hit.placeholder} (x${hit.replaced})`)
   }
-  if (replaced.length > MAX_TERMS_SHOWN) lines.push(`      and ${plural(replaced.length - MAX_TERMS_SHOWN, 'more term')}`)
+  if (replaced.length > MAX_TERMS_SHOWN)
+    lines.push(`      and ${plural(replaced.length - MAX_TERMS_SHOWN, 'more term')}`)
 
   const byList = new Map<string, Hit[]>()
   for (const hit of all) if (hit.dropped > 0) byList.set(hit.list, [...(byList.get(hit.list) ?? []), hit])
@@ -272,7 +294,7 @@ function entryLines({ label, hits }: Entry): string[] {
     const total = dropped.reduce((n, hit) => n + hit.dropped, 0)
     const terms = dropped
       .slice(0, MAX_TERMS_SHOWN)
-      .map(hit => `${hit.term} (x${hit.dropped})`)
+      .map((hit) => `${hit.term} (x${hit.dropped})`)
       .join(', ')
     const more = dropped.length > MAX_TERMS_SHOWN ? `, and ${dropped.length - MAX_TERMS_SHOWN} more` : ''
     lines.push(`      ${plural(total, 'line')} dropped by "${list}": ${terms}${more}`)

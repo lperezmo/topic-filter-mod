@@ -68,8 +68,11 @@ export function isOpen(view: SidebarView, summary: Summary, id: string): boolean
 
 /** Every row open in `view` now, so a press can switch from a depth to rows picked one by one. */
 export function openRows(view: SidebarView, summary: Summary): Set<string> {
-  const ids = summary.lists.flatMap(list => [listId(list.list), ...list.hits.map(hit => termId(list.list, hit.term))])
-  return new Set(ids.filter(id => isOpen(view, summary, id)))
+  const ids = summary.lists.flatMap((list) => [
+    listId(list.list),
+    ...list.hits.map((hit) => termId(list.list, hit.term)),
+  ])
+  return new Set(ids.filter((id) => isOpen(view, summary, id)))
 }
 
 /** Short bars: the widest list's bar is this many cells. */
@@ -117,19 +120,33 @@ export function sidebarView({ Box, Text, Button }: SidebarUi, input: SidebarInpu
   }
 
   if (isPaused) {
-    add(top, <Text key="paused" bold inverse wrap="truncate-end">{fit(' PAUSED: nothing is hidden. /topic-filter on', columns)}</Text>)
+    add(
+      top,
+      <Text key="paused" bold inverse wrap="truncate-end">
+        {fit(' PAUSED: nothing is hidden. /topic-filter on', columns)}
+      </Text>,
+    )
   }
   add(
     top,
     <Box key="total" flexDirection="row">
       <Text key="n" bold inverse color="claude">{` ${total.toLocaleString('en-US')} `}</Text>
-      <Text key="what" bold wrap="truncate-end">{agent === undefined ? ' hidden this session' : ' hidden in this subagent'}</Text>
+      <Text key="what" bold wrap="truncate-end">
+        {agent === undefined ? ' hidden this session' : ' hidden in this subagent'}
+      </Text>
     </Box>,
   )
   add(
     top,
     <Text key="detail" dimColor wrap="truncate-end">
-      {isEmpty ? 'Nothing yet.' : [summary.replaced > 0 ? `${plural(summary.replaced, 'word')} replaced` : '', summary.dropped > 0 ? `${plural(summary.dropped, 'line')} dropped` : ''].filter(Boolean).join(', ')}
+      {isEmpty
+        ? 'Nothing yet.'
+        : [
+            summary.replaced > 0 ? `${plural(summary.replaced, 'word')} replaced` : '',
+            summary.dropped > 0 ? `${plural(summary.dropped, 'line')} dropped` : '',
+          ]
+            .filter(Boolean)
+            .join(', ')}
     </Text>,
   )
 
@@ -137,10 +154,16 @@ export function sidebarView({ Box, Text, Button }: SidebarUi, input: SidebarInpu
   add(
     top,
     <Box key="tabs" flexDirection="row" marginTop={1} gap={2}>
-      <Button key="tab:lists" plain hotkey="1" dimColor={view.tab !== 'lists'} onPress={press('tab:lists')}>Lists</Button>
-      <Button key="tab:feed" plain hotkey="2" dimColor={view.tab !== 'feed'} onPress={press('tab:feed')}>Feed</Button>
+      <Button key="tab:lists" plain hotkey="1" dimColor={view.tab !== 'lists'} onPress={press('tab:lists')}>
+        Lists
+      </Button>
+      <Button key="tab:feed" plain hotkey="2" dimColor={view.tab !== 'feed'} onPress={press('tab:feed')}>
+        Feed
+      </Button>
       <Box key="gap" flexGrow={1} />
-      <Text key="scope" dimColor wrap="truncate-start">{scope}</Text>
+      <Text key="scope" dimColor wrap="truncate-start">
+        {scope}
+      </Text>
     </Box>,
     2,
   )
@@ -162,11 +185,16 @@ export function sidebarView({ Box, Text, Button }: SidebarUi, input: SidebarInpu
 
   function treeRows(): void {
     if (isEmpty) {
-      add(body, <Text key="empty" dimColor>Hidden terms show here as Claude reads them.</Text>)
+      add(
+        body,
+        <Text key="empty" dimColor>
+          Hidden terms show here as Claude reads them.
+        </Text>,
+      )
       return
     }
     if (!countsOnly) depthControl()
-    const widest = Math.max(1, ...summary.lists.map(list => list.replaced + list.dropped))
+    const widest = Math.max(1, ...summary.lists.map((list) => list.replaced + list.dropped))
     for (const list of summary.lists) {
       const id = listId(list.list)
       const open = !countsOnly && isOpen(view, summary, id)
@@ -178,12 +206,20 @@ export function sidebarView({ Box, Text, Button }: SidebarUi, input: SidebarInpu
         body,
         <Box key={`row-${id}`} flexDirection="row">
           {countsOnly ? (
-            <Text key="name" bold>{name}</Text>
+            <Text key="name" bold>
+              {name}
+            </Text>
           ) : (
-            <Button key={`row:${id}`} plain onPress={press(`row:${id}`)}>{name}</Button>
+            <Button key={`row:${id}`} plain onPress={press(`row:${id}`)}>
+              {name}
+            </Button>
           )}
-          <Text key="bar" color="claude">{bar}</Text>
-          <Text key="n" dimColor>{counts(list).padStart(COUNT_WIDTH)}</Text>
+          <Text key="bar" color="claude">
+            {bar}
+          </Text>
+          <Text key="n" dimColor>
+            {counts(list).padStart(COUNT_WIDTH)}
+          </Text>
         </Box>,
       )
       if (!open) continue
@@ -195,16 +231,28 @@ export function sidebarView({ Box, Text, Button }: SidebarUi, input: SidebarInpu
         add(
           body,
           <Box key={`row-${tid}`} flexDirection="row" paddingLeft={2}>
-            <Button key={`row:${tid}`} plain onPress={press(`row:${tid}`)}>{`${termOpen ? '▾' : '▸'} ${fit(hit.term, TERM_WIDTH)}`}</Button>
+            <Button
+              key={`row:${tid}`}
+              plain
+              onPress={press(`row:${tid}`)}
+            >{`${termOpen ? '▾' : '▸'} ${fit(hit.term, TERM_WIDTH)}`}</Button>
             <Box key="as" flexGrow={1}>
-              <Text key="as" color={hit.replaced > 0 ? 'warning' : undefined} dimColor={hit.replaced === 0} wrap="truncate-end">{` ${shown}`}</Text>
+              <Text
+                key="as"
+                color={hit.replaced > 0 ? 'warning' : undefined}
+                dimColor={hit.replaced === 0}
+                wrap="truncate-end"
+              >{` ${shown}`}</Text>
             </Box>
             <Text key="n" dimColor>{` ${n}`}</Text>
           </Box>,
         )
         if (!termOpen) continue
         for (const [i, source] of hit.sources.entries()) {
-          add(body, <Text key={`src-${tid}-${i}`} dimColor wrap="truncate-end">{`       ${source.label} x${source.n}`}</Text>)
+          add(
+            body,
+            <Text key={`src-${tid}-${i}`} dimColor wrap="truncate-end">{`       ${source.label} x${source.n}`}</Text>,
+          )
         }
       }
     }
@@ -220,19 +268,48 @@ export function sidebarView({ Box, Text, Button }: SidebarUi, input: SidebarInpu
     ]
     const fixed = 'Expand '.length + stops.reduce((n, [, label]) => n + label.length + 3, 0)
     const line = '─'.repeat(Math.max(2, Math.floor((columns - fixed) / 2)))
-    const parts: RenderElement[] = [<Text key="label" dimColor>Expand </Text>]
+    const parts: RenderElement[] = [
+      <Text key="label" dimColor>
+        Expand{' '}
+      </Text>,
+    ]
     for (const [n, label] of stops) {
-      if (n > 0) parts.push(<Text key={`line-${n}`} color={depth !== null && depth >= n ? 'claude' : undefined} dimColor={depth === null || depth < n}>{line}</Text>)
+      if (n > 0)
+        parts.push(
+          <Text
+            key={`line-${n}`}
+            color={depth !== null && depth >= n ? 'claude' : undefined}
+            dimColor={depth === null || depth < n}
+          >
+            {line}
+          </Text>,
+        )
       parts.push(
-        <Button key={`depth:${n}`} plain dimColor={depth !== n} onPress={press(`depth:${n}`)}>{`${depth === n ? '●' : '○'} ${label}`}</Button>,
+        <Button
+          key={`depth:${n}`}
+          plain
+          dimColor={depth !== n}
+          onPress={press(`depth:${n}`)}
+        >{`${depth === n ? '●' : '○'} ${label}`}</Button>,
       )
     }
-    add(body, <Box key="depth" flexDirection="row" marginBottom={1}>{parts}</Box>, 2)
+    add(
+      body,
+      <Box key="depth" flexDirection="row" marginBottom={1}>
+        {parts}
+      </Box>,
+      2,
+    )
   }
 
   function feedRows(): void {
     if (summary.feed.length === 0) {
-      add(body, <Text key="empty" dimColor>Each hit shows here as it happens, newest first.</Text>)
+      add(
+        body,
+        <Text key="empty" dimColor>
+          Each hit shows here as it happens, newest first.
+        </Text>,
+      )
       return
     }
     // The pane scrolls, but a feed longer than a screen or two is noise.
@@ -241,38 +318,58 @@ export function sidebarView({ Box, Text, Button }: SidebarUi, input: SidebarInpu
 
   function feedItem(item: FeedItem, i: number): void {
     const who = agent === undefined && item.agent !== undefined ? 'Subagent: ' : ''
-    const what = countsOnly ? `${who}${item.hits.length === 1 ? '1 term' : `${item.hits.length} terms`}` : `${who}${item.label}`
+    const what = countsOnly
+      ? `${who}${item.hits.length === 1 ? '1 term' : `${item.hits.length} terms`}`
+      : `${who}${item.label}`
     const n = counts(item)
     add(
       body,
       <Box key={`feed-${i}`} flexDirection="row">
         <Text key="at" dimColor>{`${clock(item.at)} `}</Text>
         <Box key="what" flexGrow={1}>
-          <Text key="what" wrap="truncate-end">{what}</Text>
+          <Text key="what" wrap="truncate-end">
+            {what}
+          </Text>
         </Box>
         <Text key="n" dimColor>{` ${n}`}</Text>
       </Box>,
     )
-    const lists = [...new Set(item.hits.map(hit => hit.list))]
+    const lists = [...new Set(item.hits.map((hit) => hit.list))]
     const detail = countsOnly
       ? lists.join(', ')
-      : lists.map(list => `${list}: ${item.hits.filter(hit => hit.list === list).map(hit => `${hit.term} x${hit.n}`).join(', ')}`).join('; ')
+      : lists
+          .map(
+            (list) =>
+              `${list}: ${item.hits
+                .filter((hit) => hit.list === list)
+                .map((hit) => `${hit.term} x${hit.n}`)
+                .join(', ')}`,
+          )
+          .join('; ')
     add(body, <Text key={`feed-${i}-hits`} dimColor wrap="truncate-end">{`      ${detail}`}</Text>)
   }
 
   function statsRows(): void {
     if (isEmpty) return
-    add(bottom, <Text key="rule" dimColor>{'─'.repeat(columns)}</Text>, 2)
+    add(
+      bottom,
+      <Text key="rule" dimColor>
+        {'─'.repeat(columns)}
+      </Text>,
+      2,
+    )
     add(
       bottom,
       <Box key="where" flexDirection="row">
         <Box key="title" flexGrow={1}>
-          <Text key="title" bold>Where it came from</Text>
+          <Text key="title" bold>
+            Where it came from
+          </Text>
         </Box>
         {summary.lastAt === undefined ? null : <Text key="last" dimColor>{`last hit ${clock(summary.lastAt)}`}</Text>}
       </Box>,
     )
-    const most = Math.max(1, ...summary.kinds.map(k => k.n))
+    const most = Math.max(1, ...summary.kinds.map((k) => k.n))
     const width = Math.max(4, columns - 12 - 5)
     for (const { kind, n } of summary.kinds) {
       const fill = Math.max(1, Math.round((n / most) * width))
@@ -280,9 +377,17 @@ export function sidebarView({ Box, Text, Button }: SidebarUi, input: SidebarInpu
         bottom,
         <Box key={`kind-${kind}`} flexDirection="row">
           <Text key="label">{fit(KIND_LABELS[kind], 12)}</Text>
-          <Text key="fill" color="claude">{'█'.repeat(fill)}</Text>
-          {fill < width ? <Text key="track" dimColor>{'░'.repeat(width - fill)}</Text> : null}
-          <Text key="n" dimColor>{String(n).padStart(5)}</Text>
+          <Text key="fill" color="claude">
+            {'█'.repeat(fill)}
+          </Text>
+          {fill < width ? (
+            <Text key="track" dimColor>
+              {'░'.repeat(width - fill)}
+            </Text>
+          ) : null}
+          <Text key="n" dimColor>
+            {String(n).padStart(5)}
+          </Text>
         </Box>,
       )
     }
@@ -296,7 +401,9 @@ export function sidebarView({ Box, Text, Button }: SidebarUi, input: SidebarInpu
       bottom,
       <Box key="facts" flexDirection="row" gap={2} marginTop={1}>
         {facts.map(([n, noun]) => (
-          <Text key={noun} dimColor>{plural(n, noun)}</Text>
+          <Text key={noun} dimColor>
+            {plural(n, noun)}
+          </Text>
         ))}
       </Box>,
       2,

@@ -45,7 +45,8 @@ const TOPICS = JSON.stringify({
   ],
 })
 
-const GH_LIST = 'lperezmo/public-repo\tA public one\tpublic\nlperezmo/secret-repo\tHidden\tprivate\nlperezmo/notes\tAbout Teotihuacan\tpublic\n'
+const GH_LIST =
+  'lperezmo/public-repo\tA public one\tpublic\nlperezmo/secret-repo\tHidden\tprivate\nlperezmo/notes\tAbout Teotihuacan\tpublic\n'
 
 function world(on: On, topics: string | null = TOPICS, packs: Packs = {}, stored: Record<string, unknown> = {}) {
   mock.env(on, { HOME })
@@ -65,7 +66,7 @@ function world(on: On, topics: string | null = TOPICS, packs: Packs = {}, stored
     const names = filesIn(e.path, packs)
     return names === undefined
       ? { deny: `ENOENT: ${e.path}` }
-      : { value: names.map(n => ({ name: `${n}.json`, kind: 'file' as const, size: 1, isLink: false })) }
+      : { value: names.map((n) => ({ name: `${n}.json`, kind: 'file' as const, size: 1, isLink: false })) }
   })
   // What the person sees, which never reaches the model.
   const shown = { statuses: [] as string[], logs: [] as string[], toasts: [] as string[] }
@@ -159,7 +160,10 @@ describe('tool output', () => {
   })
 
   test('a leftover githubTopic in the topics file is ignored', async ($, on) => {
-    const shown = world(on, '{"lists": [{"name": "repos", "mode": "drop-line", "githubTopic": "claude-hidden", "terms": ["Teotihuacan"]}]}')
+    const shown = world(
+      on,
+      '{"lists": [{"name": "repos", "mode": "drop-line", "githubTopic": "claude-hidden", "terms": ["Teotihuacan"]}]}',
+    )
     tools(on)
     const r = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
     expect(r.deny).toBeUndefined()
@@ -174,7 +178,7 @@ describe('tool output', () => {
     expect(r.deny?.includes('lists[0]')).toBe(false)
     expect(shown.toasts.at(-1)).toMatch(/lists\[0\]\.terms\[1\] must be a string/)
     expect(await labelOf($)).toBe('topic-filter: blocking tool calls, run /topic-filter')
-    expect(shown.statuses.filter(s => s !== '')).toEqual([])
+    expect(shown.statuses.filter((s) => s !== '')).toEqual([])
     expect(shown.toasts).toHaveLength(1)
     expect(ran).toEqual([])
   })
@@ -187,10 +191,16 @@ describe('tool output', () => {
     on('tool.call', async ($, e) => {
       ran.push(e.tool)
       if (e.tool === 'Read') {
-        return { result: { type: 'text', file: { filePath: FILE, content, numLines: 3, startLine: 1, totalLines: 3 } }, text: content } as never
+        return {
+          result: { type: 'text', file: { filePath: FILE, content, numLines: 3, startLine: 1, totalLines: 3 } },
+          text: content,
+        } as never
       }
       // An edit's record carries the file as it was; the model reads one line.
-      return { result: { filePath: FILE, originalFile: content }, text: `The file ${FILE} has been updated successfully.` } as never
+      return {
+        result: { filePath: FILE, originalFile: content },
+        text: `The file ${FILE} has been updated successfully.`,
+      } as never
     })
 
     const read = await $.tool.call({ tool: 'Read', file_path: FILE })
@@ -220,7 +230,11 @@ describe('context', () => {
   test("rewrites the person's prompt and tells the model", async ($, on) => {
     world(on)
     on('prompt.submit', async ($, e) => ({ text: e.text, context: e.context }))
-    const r = await $.prompt.submit({ text: 'what do we have on Teotihuacan?', wait: false, origin: { kind: 'composer' } })
+    const r = await $.prompt.submit({
+      text: 'what do we have on Teotihuacan?',
+      wait: false,
+      origin: { kind: 'composer' },
+    })
     expect(r.text?.includes('Teotihuacan')).toBe(false)
     expect(r.text?.startsWith('what do we have on ')).toBe(true)
     expect(r.context?.join('\n')).toMatch(/1 hidden term was replaced/)
@@ -238,7 +252,7 @@ describe('context', () => {
     world(on)
     on('prompt.context', async ($, e) => ({ blocks: e.blocks }))
     const r = await $.prompt.context({ blocks: [{ name: 'claudeMd', text: 'Our site: the Pyramids of Giza.' }] })
-    expect(r.blocks.map(b => b.name)).toEqual(['claudeMd', 'topicFilter'])
+    expect(r.blocks.map((b) => b.name)).toEqual(['claudeMd', 'topicFilter'])
     expect(r.blocks[0]!.text.includes('Giza')).toBe(false)
   })
 
@@ -252,7 +266,11 @@ describe('context', () => {
   test("rewrites a settings hook's context", async ($, on) => {
     world(on)
     on('prompt.attachment', async () => ({ text: 'Hook says: Teotihuacan' }))
-    const r = await $.prompt.attachment({ type: 'hook_additional_context', text: 'x', origin: { kind: 'hook', event: 'SessionStart' } as never })
+    const r = await $.prompt.attachment({
+      type: 'hook_additional_context',
+      text: 'x',
+      origin: { kind: 'hook', event: 'SessionStart' } as never,
+    })
     expect(r.text?.includes('Teotihuacan')).toBe(false)
   })
 
@@ -288,7 +306,11 @@ describe('context', () => {
     })
     let reason = ''
     try {
-      await $.tool.describe({ tool: 'mcp__notes__search', description: 'Search notes', provider: { plugin: 'mcp:notes', tier: 'user' } } as never)
+      await $.tool.describe({
+        tool: 'mcp__notes__search',
+        description: 'Search notes',
+        provider: { plugin: 'mcp:notes', tier: 'user' },
+      } as never)
     } catch (error) {
       reason = String(error)
     }
@@ -298,9 +320,17 @@ describe('context', () => {
   test("filters MCP tool descriptions and leaves built-in tools' alone", async ($, on) => {
     world(on)
     on('tool.describe', async ($, e) => ({ description: e.description }))
-    const mcp = await $.tool.describe({ tool: 'mcp__notes__search', description: 'Search notes about Teotihuacan', provider: { plugin: 'mcp:notes', tier: 'user' } } as never)
+    const mcp = await $.tool.describe({
+      tool: 'mcp__notes__search',
+      description: 'Search notes about Teotihuacan',
+      provider: { plugin: 'mcp:notes', tier: 'user' },
+    } as never)
     expect(mcp.description.includes('Teotihuacan')).toBe(false)
-    const bash = await $.tool.describe({ tool: 'Bash', description: 'Runs a command. Teotihuacan', provider: { plugin: 'engine', tier: 'core' } } as never)
+    const bash = await $.tool.describe({
+      tool: 'Bash',
+      description: 'Runs a command. Teotihuacan',
+      provider: { plugin: 'engine', tier: 'core' },
+    } as never)
     expect(bash.description).toBe('Runs a command. Teotihuacan')
   })
 })
@@ -329,7 +359,9 @@ describe('packs', () => {
   })
 
   test('a list can leave terms out of its pack and add its own', async ($, on) => {
-    world(on, usesPack({ exclude: ['quindle'], terms: ['Vexmoor'] }), { builtIn: { demo: pack(['Zorblax', 'Quindle']) } })
+    world(on, usesPack({ exclude: ['quindle'], terms: ['Vexmoor'] }), {
+      builtIn: { demo: pack(['Zorblax', 'Quindle']) },
+    })
     const out = await seen($, on, 'Zorblax met Quindle in Vexmoor.')
     expect(out.includes('Quindle')).toBe(true)
     expect(/Zorblax|Vexmoor/.test(out)).toBe(false)
@@ -346,14 +378,18 @@ describe('packs', () => {
     expect(await labelOf($)).toBe('topic-filter: blocking tool calls, run /topic-filter')
 
     await $.command.run({ command: 'topic-filter', args: '' } as never)
-    const problem = shown.logs.find(line => line.startsWith('Problem: '))
+    const problem = shown.logs.find((line) => line.startsWith('Problem: '))
     expect(problem).toMatch(/Did you mean "paleontology"\? Available: paleontology, sports\./)
   })
 
   test('/topic-filter shows where each list gets its terms, to the person only', async ($, on) => {
-    const shown = world(on, JSON.stringify({ lists: [{ name: 'dinos', pack: 'demo', terms: ['a1', 'b2'], exclude: ['x'] }] }), {
-      builtIn: { demo: pack(['Zorblax', 'Quindle']) },
-    })
+    const shown = world(
+      on,
+      JSON.stringify({ lists: [{ name: 'dinos', pack: 'demo', terms: ['a1', 'b2'], exclude: ['x'] }] }),
+      {
+        builtIn: { demo: pack(['Zorblax', 'Quindle']) },
+      },
+    )
     tools(on)
     await $.tool.call({ tool: 'Bash', command: 'ls' })
     // The engine stamps origin and presentation; a test's call leaves them out.
@@ -364,13 +400,22 @@ describe('packs', () => {
   })
 
   test('/topic-filter packs lists every pack, what it covers, and which lists use it', async ($, on) => {
-    const shown = world(on, JSON.stringify({ lists: [{ name: 'mine-list', pack: 'demo' }, { name: 'gone', pack: 'nope' }] }), {
-      mine: { demo: pack(['Quindle']), mine: pack(['A1b', 'C2d'], ['h']) },
-      builtIn: {
-        demo: pack(['Zorblax']),
-        sports: JSON.stringify({ description: 'Leagues and teams.', terms: ['Q1', 'Q2', 'Q3'], hints: [] }),
+    const shown = world(
+      on,
+      JSON.stringify({
+        lists: [
+          { name: 'mine-list', pack: 'demo' },
+          { name: 'gone', pack: 'nope' },
+        ],
+      }),
+      {
+        mine: { demo: pack(['Quindle']), mine: pack(['A1b', 'C2d'], ['h']) },
+        builtIn: {
+          demo: pack(['Zorblax']),
+          sports: JSON.stringify({ description: 'Leagues and teams.', terms: ['Q1', 'Q2', 'Q3'], hints: [] }),
+        },
       },
-    })
+    )
     const r = await $.command.run({ command: 'topic-filter', args: 'packs' } as never)
     expect(r.text).toBeUndefined()
     const text = shown.logs.join('\n')
@@ -395,7 +440,9 @@ describe('/topic-filter log', () => {
     const r = await $.command.run({ command: 'topic-filter', args: 'log' } as never)
     expect(r.text).toBeUndefined()
     const text = shown.logs.join('\n')
-    expect(text).toMatch(/ {2}Bash gh repo list\n {6}Teotihuacan -> [A-Z][a-z]+\d* \(x1\)\n {6}1 line dropped by "repos": secret-repo \(x1\)/)
+    expect(text).toMatch(
+      / {2}Bash gh repo list\n {6}Teotihuacan -> [A-Z][a-z]+\d* \(x1\)\n {6}1 line dropped by "repos": secret-repo \(x1\)/,
+    )
     // Filtered twice, listed once.
     expect(text).toMatch(/ {2}Context block claudeMd\n {6}Teotihuacan -> \S+ \(x1\)\n/)
     expect(text.includes('Hidden\tprivate')).toBe(false)
@@ -419,7 +466,7 @@ describe('/topic-filter log', () => {
     expect(text.includes('Context block claudeMd')).toBe(false)
     expect(text).toMatch(/ {2}Attachment \(file\)\n {6}Teotihuacan -> \S+ \(x1\)/)
     // All is well, so the warning-styled status line stays clear.
-    expect(shown.statuses.filter(s => s !== '')).toEqual([])
+    expect(shown.statuses.filter((s) => s !== '')).toEqual([])
   })
 
   test('log clear empties it', async ($, on) => {
@@ -436,7 +483,13 @@ describe('/topic-filter log', () => {
 /** The panes beneath the plugin: which are open, and every open and close asked for. */
 function panes(on: On) {
   const state = { open: new Set<string>(), opened: [] as string[], closed: [] as string[] }
-  on('ui.panes', () => ({ value: [...state.open].map(id => ({ id, title: id, isShown: true, isFocused: false, isPlaced: true })) }) as never)
+  on(
+    'ui.panes',
+    () =>
+      ({
+        value: [...state.open].map((id) => ({ id, title: id, isShown: true, isFocused: false, isPlaced: true })),
+      }) as never,
+  )
   on('ui.open', ($, e) => {
     state.open.add(e.id)
     state.opened.push(e.id)
@@ -455,7 +508,13 @@ const inAgent = <T extends object>(input: T): T => ({ ...input, agentId: 'agent-
 
 /** The subagents beneath the plugin, as `$.agent.list()` answers. */
 function agents(on: On) {
-  on('agent.list', () => ({ value: [{ id: 'agent-7', description: 'Review the diff', type: 'general-purpose', status: 'running' }] }) as never)
+  on(
+    'agent.list',
+    () =>
+      ({
+        value: [{ id: 'agent-7', description: 'Review the diff', type: 'general-purpose', status: 'running' }],
+      }) as never,
+  )
 }
 
 /** The Pane props a surface hands the hook; `agentId` puts that subagent's transcript in view. */
@@ -470,18 +529,24 @@ const paneProps = (agentId?: string) => ({
 
 /** Every button label a mounted drawing shows, in order. */
 async function buttonsOf(ui: { findAll: (q: { type: string }) => Promise<{ text: string }[]> }): Promise<string[]> {
-  return (await ui.findAll({ type: 'Button' })).map(t => t.text)
+  return (await ui.findAll({ type: 'Button' })).map((t) => t.text)
 }
 
 /** The footer label topic-filter draws now, as plain text, with no other modes. */
 async function labelOf($: Engine): Promise<string> {
-  const ui = await $.ui.mount({ plugin: 'topic-filter', surface: 'terminal', component: 'SessionMode', requestId: 'label', props: { modes: [] } })
-  return (await ui.findAll({ type: 'Text' })).map(n => n.text).find(s => s.startsWith('topic-filter:')) ?? ''
+  const ui = await $.ui.mount({
+    plugin: 'topic-filter',
+    surface: 'terminal',
+    component: 'SessionMode',
+    requestId: 'label',
+    props: { modes: [] },
+  })
+  return (await ui.findAll({ type: 'Text' })).map((n) => n.text).find((s) => s.startsWith('topic-filter:')) ?? ''
 }
 
 /** Every line of text a mounted drawing shows, in order. */
 async function textOf(ui: { findAll: (q: { type: string }) => Promise<{ text: string }[]> }): Promise<string[]> {
-  return (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  return (await ui.findAll({ type: 'Text' })).map((t) => t.text)
 }
 
 const SURFACES = ['terminal', 'desktop'] as const
@@ -497,15 +562,21 @@ describe('footer label', () => {
         return h(Text, {}, e.props.modes.join(' & ')) as RenderElement
       })
       await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
-      const ui = await $.ui.mount({ plugin: 'topic-filter', surface, component: 'SessionMode', requestId: 'modes', props: { modes: ['focus'] } })
+      const ui = await $.ui.mount({
+        plugin: 'topic-filter',
+        surface,
+        component: 'SessionMode',
+        requestId: 'modes',
+        props: { modes: ['focus'] },
+      })
       expect(await textOf(ui)).toEqual(['focus & topic-filter: 2 hidden'])
-      expect(shown.statuses.filter(s => s !== '')).toEqual([])
+      expect(shown.statuses.filter((s) => s !== '')).toEqual([])
 
       await $.command.run(typed('off'))
       await ui.redraw()
       expect((await textOf(ui)).join('')).toContain('focus & topic-filter: paused')
-      expect((await ui.findAll({ type: 'Text' })).some(n => n.props?.color === 'warning')).toBe(true)
-      expect(shown.statuses.filter(s => s !== '')).toEqual([])
+      expect((await ui.findAll({ type: 'Text' })).some((n) => n.props?.color === 'warning')).toBe(true)
+      expect(shown.statuses.filter((s) => s !== '')).toEqual([])
     })
   }
 })
@@ -587,18 +658,29 @@ describe('sidebar', () => {
       world(on)
       tools(on)
       await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
-      const ui = await $.ui.mount({ plugin: 'topic-filter', surface, component: 'Pane', requestId: SIDEBAR_ID, props: paneProps() })
+      const ui = await $.ui.mount({
+        plugin: 'topic-filter',
+        surface,
+        component: 'Pane',
+        requestId: SIDEBAR_ID,
+        props: paneProps(),
+      })
       const lines = await textOf(ui)
-      expect(lines.slice(0, 4)).toEqual([' 2 ', ' hidden this session', '1 word replaced, 1 line dropped', 'whole session'])
+      expect(lines.slice(0, 4)).toEqual([
+        ' 2 ',
+        ' hidden this session',
+        '1 word replaced, 1 line dropped',
+        'whole session',
+      ])
       const rows = await buttonsOf(ui)
       expect(rows.slice(0, 2)).toEqual(['Lists', 'Feed'])
       expect(rows).toContain('● lists')
-      expect(rows.some(row => /^▾ places +$/.test(row))).toBe(true)
-      expect(rows.some(row => /^▸ Teotihuacan +$/.test(row))).toBe(true)
-      expect(lines.some(line => /^ -> [A-Z][a-z]+\d*$/.test(line))).toBe(true)
+      expect(rows.some((row) => /^▾ places +$/.test(row))).toBe(true)
+      expect(rows.some((row) => /^▸ Teotihuacan +$/.test(row))).toBe(true)
+      expect(lines.some((line) => /^ -> [A-Z][a-z]+\d*$/.test(line))).toBe(true)
       expect(lines).toContain(' line dropped')
       // Sources show only once a term is open.
-      expect(lines.some(line => line.includes('Bash gh repo list'))).toBe(false)
+      expect(lines.some((line) => line.includes('Bash gh repo list'))).toBe(false)
       expect(lines).toContain('Where it came from')
       expect(lines).toContain('Commands    ')
       expect(lines.slice(-3)).toEqual(['2 terms', '2 lists', '1 source'])
@@ -608,25 +690,31 @@ describe('sidebar', () => {
       world(on)
       tools(on)
       await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
-      const ui = await $.ui.mount({ plugin: 'topic-filter', surface, component: 'Pane', requestId: SIDEBAR_ID, props: paneProps() })
+      const ui = await $.ui.mount({
+        plugin: 'topic-filter',
+        surface,
+        component: 'Pane',
+        requestId: SIDEBAR_ID,
+        props: paneProps(),
+      })
 
       await ui.press({ key: 'depth:2' })
       await ui.redraw()
       expect(await buttonsOf(ui)).toContain('● all')
-      expect((await textOf(ui)).filter(line => line === '       Bash gh repo list x1')).toHaveLength(2)
+      expect((await textOf(ui)).filter((line) => line === '       Bash gh repo list x1')).toHaveLength(2)
 
       await ui.press({ key: 'depth:0' })
       await ui.redraw()
       const closed = await buttonsOf(ui)
-      expect(closed.some(row => row.includes('Teotihuacan'))).toBe(false)
+      expect(closed.some((row) => row.includes('Teotihuacan'))).toBe(false)
 
       // One list opened by hand: no stop is lit, and only that list shows its terms.
       await ui.press({ key: 'row:l/places' })
       await ui.redraw()
       const one = await buttonsOf(ui)
-      expect(one.filter(row => row.startsWith('●'))).toEqual([])
-      expect(one.some(row => row.includes('Teotihuacan'))).toBe(true)
-      expect(one.some(row => row.includes('secret-repo'))).toBe(false)
+      expect(one.filter((row) => row.startsWith('●'))).toEqual([])
+      expect(one.some((row) => row.includes('Teotihuacan'))).toBe(true)
+      expect(one.some((row) => row.includes('secret-repo'))).toBe(false)
     })
 
     test(`the feed lists each hit, newest first (${surface})`, async ($, on) => {
@@ -637,7 +725,13 @@ describe('sidebar', () => {
       })
       await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
       await $.tool.call({ tool: 'Read', file_path: 'C:/notes/trip.md' })
-      const ui = await $.ui.mount({ plugin: 'topic-filter', surface, component: 'Pane', requestId: SIDEBAR_ID, props: paneProps() })
+      const ui = await $.ui.mount({
+        plugin: 'topic-filter',
+        surface,
+        component: 'Pane',
+        requestId: SIDEBAR_ID,
+        props: paneProps(),
+      })
       await ui.press({ key: 'tab:feed' })
       await ui.redraw()
       const lines = await textOf(ui)
@@ -661,14 +755,20 @@ describe('sidebar', () => {
       await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
       await $.tool.call(inAgent({ tool: 'Bash', command: 'cat plan.md' }))
 
-      const ui = await $.ui.mount({ plugin: 'topic-filter', surface, component: 'Pane', requestId: SIDEBAR_ID, props: paneProps() })
+      const ui = await $.ui.mount({
+        plugin: 'topic-filter',
+        surface,
+        component: 'Pane',
+        requestId: SIDEBAR_ID,
+        props: paneProps(),
+      })
       expect((await textOf(ui)).slice(-4)).toEqual(['2 terms', '2 lists', '2 sources', '1 subagent'])
 
       // The person opens the subagent's transcript: the same pane, drawn for that view.
       await ui.redraw(paneProps('agent-7'))
       const one = await textOf(ui)
       expect(one.slice(0, 4)).toEqual([' 1 ', ' hidden in this subagent', '1 line dropped', 'subagent Review the diff'])
-      expect(one.some(line => line.includes('Teotihuacan'))).toBe(false)
+      expect(one.some((line) => line.includes('Teotihuacan'))).toBe(false)
       expect(one.slice(-3)).toEqual(['1 term', '1 list', '1 source'])
     })
 
@@ -676,7 +776,14 @@ describe('sidebar', () => {
       world(on)
       // A pane of another id reaches the hooks beneath, which draw the view
       // with a summary of their own: the settings cannot be changed in a test.
-      const hits = Array.from({ length: 30 }, (_, i) => ({ term: `Term${i}`, placeholder: `Name${i}`, list: 'pack demo', replaced: 1, dropped: 0, sources: [{ label: 'Read notes.md', n: 1 }] }))
+      const hits = Array.from({ length: 30 }, (_, i) => ({
+        term: `Term${i}`,
+        placeholder: `Name${i}`,
+        list: 'pack demo',
+        replaced: 1,
+        dropped: 0,
+        sources: [{ label: 'Read notes.md', n: 1 }],
+      }))
       const summary: Summary = {
         replaced: 30,
         dropped: 0,
@@ -687,31 +794,48 @@ describe('sidebar', () => {
         kinds: [{ kind: 'files', n: 30 }],
         sources: 1,
         lastAt: 0,
-        feed: [{ at: 0, label: 'Read notes.md', replaced: 30, dropped: 0, hits: hits.map(hit => ({ list: hit.list, term: hit.term, n: 1 })) }],
+        feed: [
+          {
+            at: 0,
+            label: 'Read notes.md',
+            replaced: 30,
+            dropped: 0,
+            hits: hits.map((hit) => ({ list: hit.list, term: hit.term, n: 1 })),
+          },
+        ],
       }
       let countsOnly = false
       let tab: 'lists' | 'feed' = 'lists'
       on('ui.render', { component: 'Pane' }, async ($, e) => {
         const { Box, Text, Button } = await $.ui.resolve(e)
         const view = { tab, open: new Set<string>() }
-        return sidebarView({ Box, Text, Button }, { summary, countsOnly, view, columns: 48, rows: 30, onPress: () => {} })
+        return sidebarView(
+          { Box, Text, Button },
+          { summary, countsOnly, view, columns: 48, rows: 30, onPress: () => {} },
+        )
       })
 
-      const ui = await $.ui.mount({ plugin: 'topic-filter', surface, component: 'Pane', requestId: 'other', props: paneProps() })
+      const ui = await $.ui.mount({
+        plugin: 'topic-filter',
+        surface,
+        component: 'Pane',
+        requestId: 'other',
+        props: paneProps(),
+      })
       const collapsed = await buttonsOf(ui)
       expect(collapsed).toContain('● none')
-      expect(collapsed.some(row => row.includes('Term1'))).toBe(false)
+      expect(collapsed.some((row) => row.includes('Term1'))).toBe(false)
 
       countsOnly = true
       await ui.redraw()
       const bare = [...(await textOf(ui)), ...(await buttonsOf(ui))]
-      expect(bare.some(line => /Term|Name|notes/.test(line))).toBe(false)
-      expect(bare.some(line => line.includes('pack demo'))).toBe(true)
+      expect(bare.some((line) => /Term|Name|notes/.test(line))).toBe(false)
+      expect(bare.some((line) => line.includes('pack demo'))).toBe(true)
 
       tab = 'feed'
       await ui.redraw()
       const feed = [...(await textOf(ui)), ...(await buttonsOf(ui))]
-      expect(feed.some(line => /Term|Name|notes/.test(line))).toBe(false)
+      expect(feed.some((line) => /Term|Name|notes/.test(line))).toBe(false)
       expect(feed).toContain('30 terms')
     })
   }
@@ -730,7 +854,7 @@ describe('pause', () => {
     const off = await $.command.run(typed('off'))
     expect(shown.logs[0]).toBe('topic-filter paused: nothing is hidden until /topic-filter on.')
     expect(off.context?.[0]).toMatch(/^The user paused topic-filter/)
-    expect(shown.statuses.filter(s => s !== '')).toEqual([])
+    expect(shown.statuses.filter((s) => s !== '')).toEqual([])
 
     const open = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
     expect((open.result as { stdout: string }).stdout).toBe(GH_LIST)
@@ -743,7 +867,10 @@ describe('pause', () => {
     expect(back.context?.[0]).toMatch(/^The user turned topic-filter back on/)
     const hidden = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
     expect((hidden.result as { stdout: string }).stdout.includes('secret-repo')).toBe(false)
-    const refused = await $.tool.call({ tool: 'Bash', command: `grep ${placeholderIn((hidden.result as { stdout: string }).stdout)} notes.md` })
+    const refused = await $.tool.call({
+      tool: 'Bash',
+      command: `grep ${placeholderIn((hidden.result as { stdout: string }).stdout)} notes.md`,
+    })
     expect(refused.deny).toMatch(/is a placeholder for a hidden item/)
     expect(ran).toEqual(['Bash', 'Bash', 'Bash', 'Bash'])
   })
@@ -751,22 +878,37 @@ describe('pause', () => {
   test('pause and stop are off too, and resume and start are on', async ($, on) => {
     const shown = world(on)
     tools(on)
-    for (const [arg, log] of [['pause', /^topic-filter paused/], ['resume', /^Filter on/], ['stop', /^topic-filter paused/], ['start', /^Filter on/]] as const) {
+    for (const [arg, log] of [
+      ['pause', /^topic-filter paused/],
+      ['resume', /^Filter on/],
+      ['stop', /^topic-filter paused/],
+      ['start', /^Filter on/],
+    ] as const) {
       shown.logs.length = 0
       await $.command.run(typed(arg))
       expect(shown.logs.join('\n')).toMatch(log)
-      expect(shown.statuses.filter(s => s !== '')).toEqual([])
+      expect(shown.statuses.filter((s) => s !== '')).toEqual([])
     }
   })
 
   test('only the person can pause: a command from anywhere else leaves the filter on', async ($, on) => {
     const shown = world(on)
     tools(on)
-    for (const origin of [undefined, { kind: 'plugin', name: 'other' }, { kind: 'task-notification' }, { kind: 'peer' }, { kind: 'bridge' }]) {
-      const r = await $.command.run({ command: 'topic-filter', args: 'off', ...(origin === undefined ? {} : { origin }) } as never)
+    for (const origin of [
+      undefined,
+      { kind: 'plugin', name: 'other' },
+      { kind: 'task-notification' },
+      { kind: 'peer' },
+      { kind: 'bridge' },
+    ]) {
+      const r = await $.command.run({
+        command: 'topic-filter',
+        args: 'off',
+        ...(origin === undefined ? {} : { origin }),
+      } as never)
       expect(r.context).toBeUndefined()
     }
-    expect(shown.logs.filter(line => line.startsWith('Only you can pause'))).toHaveLength(5)
+    expect(shown.logs.filter((line) => line.startsWith('Only you can pause'))).toHaveLength(5)
     const r = await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
     expect((r.result as { stdout: string }).stdout.includes('secret-repo')).toBe(false)
   })
@@ -788,7 +930,10 @@ describe('pause', () => {
     on('tool.call', async ($, e) => {
       ran.push(e.tool)
       if (e.tool === 'Read') {
-        return { result: { type: 'text', file: { filePath: FILE, content, numLines: 3, startLine: 1, totalLines: 3 } }, text: content } as never
+        return {
+          result: { type: 'text', file: { filePath: FILE, content, numLines: 3, startLine: 1, totalLines: 3 } },
+          text: content,
+        } as never
       }
       return { result: { filePath: FILE }, text: 'written' } as never
     })
@@ -823,7 +968,10 @@ describe('pause', () => {
     on('tool.call', async ($, e) => {
       ran.push(e.tool)
       if (e.tool === 'Read') {
-        return { result: { type: 'text', file: { filePath: FILE, content, numLines: 2, startLine: 1, totalLines: 5000 } }, text: content } as never
+        return {
+          result: { type: 'text', file: { filePath: FILE, content, numLines: 2, startLine: 1, totalLines: 5000 } },
+          text: content,
+        } as never
       }
       return { result: { filePath: FILE }, text: 'written' } as never
     })
@@ -851,7 +999,13 @@ describe('pause', () => {
       tools(on)
       await $.tool.call({ tool: 'Bash', command: 'gh repo list' })
       await $.command.run(typed('off'))
-      const ui = await $.ui.mount({ plugin: 'topic-filter', surface, component: 'Pane', requestId: SIDEBAR_ID, props: paneProps() })
+      const ui = await $.ui.mount({
+        plugin: 'topic-filter',
+        surface,
+        component: 'Pane',
+        requestId: SIDEBAR_ID,
+        props: paneProps(),
+      })
       const lines = await textOf(ui)
       expect(lines[0]).toMatch(/^ PAUSED: nothing is hidden\. \/topic-filter on +$/)
       expect(lines.slice(1, 3)).toEqual([' 2 ', ' hidden this session'])

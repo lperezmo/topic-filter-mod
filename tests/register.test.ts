@@ -924,7 +924,7 @@ describe('pause', () => {
 
   test('a file read whole while paused may be overwritten; one read in part may not', async ($, on) => {
     world(on)
-    const FILE = 'C:\work\notes.md'
+    const FILE = 'C:\\work\\notes.md'
     const content = '# Notes\nsecret-repo has the photos.\nGroceries\n'
     const ran: string[] = []
     on('tool.call', async ($, e) => {
